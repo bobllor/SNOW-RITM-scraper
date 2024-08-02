@@ -17,8 +17,6 @@ if __name__ == '__main__':
     login.login_sn()
 
     # search for an RITM ticket and scrape the info on the ticket
-    # TODO: WIP, check main_test.py for the core logic
-    # then placeholder.py (subject to name change) for the class logic
     # TODO: create a proper loop, for now keep break
     # xpath for global search in order to enter the RITM number
     search_xpath = '//input[@name="sysparm_search"]'

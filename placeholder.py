@@ -108,7 +108,8 @@ class ScrapeRITM():
         for xpath in address_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, xpath)
             part = element_xpath.get_attribute("value")
-            if part != None:
+            part = part.strip()
+            if part != None or part == " ":
                 address.append(part)
     
         return " ".join(address)
