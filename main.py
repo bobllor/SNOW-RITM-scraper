@@ -14,6 +14,7 @@ if __name__ == '__main__':
     user, pw = get_accs()
     login_link = "https://tek.service-now.com/navpage.do"
     login = Login(driver, login_link, user, pw)
+    print("Logging in...")
     login.login_sn()
 
     # TODO: create a while loop
@@ -26,14 +27,17 @@ if __name__ == '__main__':
     count = 0
     while count < 2:
         ritm = input("Enter an RITM number: ")
+        print("Searching for RITM...")
         scraper = ScrapeRITM(driver, ritm)
         scraper.search_ritm()
 
         req, name, address = scraper.scrape_ritm()
+        print("Obtaining information for label creation...")
         # remove this later, used for debugging purposes
         print(f"{ritm} {req} {name} {address}")
 
         user_info = scraper.scrape_user_info()
+        print("Obtaining information for user creation...")
         # remove this later, used for debugging purposes
         print(user_info)
 
@@ -41,6 +45,7 @@ if __name__ == '__main__':
         input("Enter 'enter' to continue")
         
         new_user = UserCreation(driver, new_user_link, user_info, name)
+        print("Creating new user...")
         new_user.format_office_id()
         new_user.create_user()
 

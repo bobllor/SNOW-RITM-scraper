@@ -1,6 +1,7 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 import time
+import re
 
 class Login:
     def __init__(self, driver, link, user, pw):
@@ -13,7 +14,6 @@ class Login:
         self.driver.get(self.link)
 
         time.sleep(5)
-        print("Logging in...")
         
         self.driver.switch_to.frame("gsft_main")
 
@@ -26,6 +26,7 @@ class Login:
     
         self.driver.switch_to.default_content()
         
+        print("Login complete.")
         time.sleep(8)
 
 class ScrapeRITM():
@@ -41,6 +42,7 @@ class ScrapeRITM():
         self.consultant_info_xpath = '//tr[@id="element.container_23caec60e17c4a00c2ab91d15440c5ee"]'
         self.address_info_xpath = '//tr[@id="element.container_66291a0ae1fc8a00c2ab91d15440c5c2"]'
         self.company_info_xpath = '//tr[@id="element.container_84f76a0ee1fc8a00c2ab91d15440c50e"]'
+        self.org_info_xpath = '//tr[@id="element.container_dbc92e7fe1a44a00c2ab91d15440c51c"]'
         # normal xpaths inside a ticket
         self.req_xpath = '//input[@id="sys_display.sc_req_item.request"]'
     
@@ -55,8 +57,9 @@ class ScrapeRITM():
         global_search.send_keys(self.ritm)
         global_search.send_keys(Keys.ENTER)
 
-        time.sleep(13)
-        
+        time.sleep(10)
+
+        print("RITM search complete.")
         # reset search field to prepare it for future queries
         global_search.click()
         global_search.send_keys(Keys.CONTROL + "a")
@@ -72,6 +75,7 @@ class ScrapeRITM():
 
         # returns the REQ number
         req = self.scrape_req()
+        time.sleep(5)
 
         # returns the full name of the consultant
         name = self.scrape_name()
@@ -133,16 +137,16 @@ class ScrapeRITM():
     
     def scrape_user_info(self):
         # consultant's company xpaths
-        cid_xpath = '//tr[19]//input[@class="questionsetreference form-control element_reference_input"]'
         oid_xpath = '//tr[24]//input[@class="questionsetreference form-control element_reference_input"]'
         pid_xpath = '//tr[7]//input[@class="cat_item_option sc-content-pad form-control"]'
-        # CHECKS IF "NEW CUSTOMER" IS A VALUE ON CID XPATH.
-        # this is needed because if "New Customer" is selected then the company and CID xpaths
-        # swap positions with each other and every value below it increments by one.
+
+        # CHECKS IF CID CONTAINS ANYTHING OTHER THAN A NUMBER.
+        # this is needed because if "New Customer/Not LIsted" is selected then multiple XPATHS are
+        # positioned in different locations due to an additional field form appearing.
+        cid_xpath = '//tr[19]//input[@class="questionsetreference form-control element_reference_input"]'
         customer_id_values = ["New Customer", "Not Listed"]
         if self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value") in customer_id_values:
             company_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
-            cid_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
         else:
             company_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
 
@@ -158,7 +162,7 @@ class ScrapeRITM():
             part = element_xpath.get_attribute("value")
             user_info.append(part)
 
-        company_xpaths = [cid_xpath, company_xpath, oid_xpath, pid_xpath]
+        company_xpaths = [company_xpath, oid_xpath, pid_xpath]
 
         for xpath in company_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{xpath}")
@@ -166,8 +170,13 @@ class ScrapeRITM():
 
             if part != None:
                 user_info.append(part)
+
+        element_xpath = self.driver.find_element(By.XPATH, f'{self.org_info_xpath}//option[contains(@selected, "SELECTED")]')
+        org = element_xpath.get_attribute("value")
+
+        user_info.append(org)
         
-        # returns a list in order: email, employee ID, customer ID, company, office ID, project ID.
+        # returns a list in order: email, employee ID, company, office ID, project ID, and organization
         return user_info
         
 # fill in the user fields of a new user record
@@ -182,16 +191,90 @@ class UserCreation:
         # company info, values are initialized from a list
         self.email = user_info[0]
         self.eid = user_info[1]
-        self.cid = user_info[2]
-        self.company = user_info[3]
-        self.oid = user_info[4]
-        self.pid = user_info[5]
+        self.company = user_info[2]
+        self.oid = user_info[3]
+        self.pid = user_info[4]
+        self.org = user_info[5]
 
     def create_user(self):
         self.driver.get(self.link)
+
+        time.sleep(10)
+
+        self.driver.switch_to.frame("gsft_main")
+
+        f_name, l_name = self.name_keys()
+
+        # fill in consultant information (name + employee ID)
+        self.driver.find_element(By.ID, "sys_user.first_name").send_keys(f_name)
+        time.sleep(1.5)
+        self.driver.find_element(By.ID, "sys_user.last_name").send_keys(l_name)
+        time.sleep(3)
+        self.driver.find_element(By.ID, "sys_user.employee_number").send_keys(self.eid)
+
+        time.sleep(3)
+
+        user_name = self.user_name_keys()
+        # fill in email address fields
+        # user_name is the "FIRST.LAST@teksystemsgs.com"
+        self.driver.find_element(By.ID, "sys_user.user_name").send_keys(user_name)
+        time.sleep(1.5)
+        self.driver.find_element(By.ID, "sys_user.email").send_keys(self.email)
+        time.sleep(1.5)
+        self.driver.find_element(By.ID, "sys_user.u_personal_e_mail").send_keys(self.email)
+
+        time.sleep(4)
+        # NOTE: the company names in aerotek_list deviates from the standard
+        # user creation, look for conditionals and aerotek_list.
+        # TODO: set up aerotek organizations requirements.
+        aerotek_list = ["Aerotek", "Aston Carter", "Actalent"]
+        # fill in organization fields.
+        # check what the selected organization is, GS requires "0000xxxxx" and other selections
+        # uses unique project IDs related to their name, i.e. Staffing = TEKSTAFFING.
+        if self.org != "GS":
+            if self.org == "Staffing":
+                self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys("TEKSTAFFING")
+        else:
+            self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.pid)
+        time.sleep(1.5)
+        self.driver.find_element(By.ID, "sys_display.sys_user.company").send_keys(self.company)
+        time.sleep(1.5)
+        self.driver.find_element(By.ID, "sys_user.u_office_id").send_keys(self.oid)
+        
+        time.sleep(5)
+        print("User created. Please review the information then hit save.")
+        input("Enter 'enter' to continue.")
 
     def format_office_id(self):
         full_oid = self.oid
         full_oid = full_oid.split("-")
 
         self.oid = full_oid[0]
+    
+    # used to split name in order to fill the form in properly
+    def name_keys(self):
+        name = self.name
+
+        name = name.title()
+        name = name.split()
+
+        return name[0], name[1]
+
+    # used with first and last name ONLY to create user name with domain @teksystemsgs.com.
+    def user_name_keys(self):
+        name = self.name
+
+        name = name.title()
+
+        if "-" in name:
+            name = name.replace("-", " ")
+        
+        name = name.split()
+
+        return f"{name[0]}.{name[-1]}@teksystemsgs.com"
+    
+    # format the project ID to the correct length, only runs if the project ID
+    # is incorrect to begin with.
+    def format_project_id(self):
+        pid = self.pid
+        search = re.match(r'^(0{4})([0-9]{5})$', pid)
