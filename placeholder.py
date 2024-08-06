@@ -23,7 +23,6 @@ class Login:
         time.sleep(5)
         self.driver.find_element(By.ID, "sysverb_login").click()
 
-    
         self.driver.switch_to.default_content()
         
         print("Login complete.")
@@ -38,16 +37,15 @@ class ScrapeRITM():
         self.search_xpath = '//input[@name="sysparm_search"]'
 
         # xpath of RITM tickets
-        # these are containers that hold other xpaths for form values
+        # these are containers that need to be accessed before being able to grab the values
         self.consultant_info_xpath = '//tr[@id="element.container_23caec60e17c4a00c2ab91d15440c5ee"]'
         self.address_info_xpath = '//tr[@id="element.container_66291a0ae1fc8a00c2ab91d15440c5c2"]'
         self.company_info_xpath = '//tr[@id="element.container_84f76a0ee1fc8a00c2ab91d15440c50e"]'
         self.org_info_xpath = '//tr[@id="element.container_dbc92e7fe1a44a00c2ab91d15440c51c"]'
-        # normal xpaths inside a ticket
+
+        # xpath that does not require a container to access
         self.req_xpath = '//input[@id="sys_display.sc_req_item.request"]'
     
-    # main functionality, enter the RITM value into the global search
-    # in order to grab the values
     def search_ritm(self):
         # ensure that driver is not in a frame before performing a search.
         self.driver.switch_to.default_content()
@@ -65,9 +63,6 @@ class ScrapeRITM():
         global_search.send_keys(Keys.CONTROL + "a")
         global_search.send_keys(Keys.DELETE)
     
-    # main web scrape functionality, obtain info from RITM ticket
-    # returns Full Name, Full Address, and ZIP code
-    # the result of this function feeds into the label generator
     # TODO: link this file to my fedex label generator, eliminating
     # the need for manual input (except RITM ticket)
     def scrape_ritm(self):
@@ -108,6 +103,7 @@ class ScrapeRITM():
         # xpath of container that holds all address info
         column_xpath1 = '//div[@class="section-content catalog-section-content"]/div[1]'
         column_xpath2 = '//div[@class="section-content catalog-section-content"]/div[2]'
+
         # xpath of street 1, street 2, and postal
         street_one_xpath = f'{column_xpath1}//tr[1]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
         street_two_xpath = f'{column_xpath1}//tr[2]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
@@ -150,9 +146,10 @@ class ScrapeRITM():
         else:
             company_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
 
-        # consultant xpaths
+        # consultant info xpaths
         email_xpath = '//tr[3]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
         eid_xpath = '//tr[4]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
+        org_xpath = '//option[contains(@selected, "SELECTED")]'
 
         consultant_xpaths = [email_xpath, eid_xpath]
         user_info = []
@@ -162,24 +159,17 @@ class ScrapeRITM():
             part = element_xpath.get_attribute("value")
             user_info.append(part)
 
-        company_xpaths = [company_xpath, oid_xpath, pid_xpath]
-
+        company_xpaths = [company_xpath, oid_xpath, pid_xpath, org_xpath]
         for xpath in company_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{xpath}")
             part = element_xpath.get_attribute("value")
 
             if part != None:
                 user_info.append(part)
-
-        element_xpath = self.driver.find_element(By.XPATH, f'{self.org_info_xpath}//option[contains(@selected, "SELECTED")]')
-        org = element_xpath.get_attribute("value")
-
-        user_info.append(org)
         
         # returns a list in order: email, employee ID, company, office ID, project ID, and organization
         return user_info
         
-# fill in the user fields of a new user record
 # NOTE: still requires manual input in saving and other missing information
 # that requires interaction with the SNOW UI.
 class UserCreation:
@@ -188,7 +178,7 @@ class UserCreation:
         self.link = link
         self.name = name
 
-        # company info, values are initialized from a list
+        # company info, instances are initialized from a list
         self.email = user_info[0]
         self.eid = user_info[1]
         self.company = user_info[2]
@@ -199,23 +189,25 @@ class UserCreation:
     def create_user(self):
         self.driver.get(self.link)
 
-        time.sleep(10)
+        time.sleep(5)
 
         self.driver.switch_to.frame("gsft_main")
 
+        self.format_project_id()
+        
         f_name, l_name = self.name_keys()
 
-        # fill in consultant information (name + employee ID)
+        # consultant information (name + employee ID)
         self.driver.find_element(By.ID, "sys_user.first_name").send_keys(f_name)
         time.sleep(1.5)
         self.driver.find_element(By.ID, "sys_user.last_name").send_keys(l_name)
-        time.sleep(3)
+        time.sleep(1.5)
         self.driver.find_element(By.ID, "sys_user.employee_number").send_keys(self.eid)
 
-        time.sleep(3)
+        time.sleep(1.5)
 
         user_name = self.user_name_keys()
-        # fill in email address fields
+        # email information
         # user_name is the "FIRST.LAST@teksystemsgs.com"
         self.driver.find_element(By.ID, "sys_user.user_name").send_keys(user_name)
         time.sleep(1.5)
@@ -223,12 +215,11 @@ class UserCreation:
         time.sleep(1.5)
         self.driver.find_element(By.ID, "sys_user.u_personal_e_mail").send_keys(self.email)
 
-        time.sleep(4)
+        time.sleep(2)
         # NOTE: the company names in aerotek_list deviates from the standard
         # user creation, look for conditionals and aerotek_list.
         # TODO: set up aerotek organizations requirements.
         aerotek_list = ["Aerotek", "Aston Carter", "Actalent"]
-        # fill in organization fields.
         # check what the selected organization is, GS requires "0000xxxxx" and other selections
         # uses unique project IDs related to their name, i.e. Staffing = TEKSTAFFING.
         if self.org != "GS":
@@ -241,40 +232,65 @@ class UserCreation:
         time.sleep(1.5)
         self.driver.find_element(By.ID, "sys_user.u_office_id").send_keys(self.oid)
         
-        time.sleep(5)
         print("User created. Please review the information then hit save.")
-        input("Enter 'enter' to continue.")
+        time.sleep(5)
 
+    # extract only the number ID of the oid instance
     def format_office_id(self):
         full_oid = self.oid
         full_oid = full_oid.split("-")
 
         self.oid = full_oid[0]
     
-    # used to split name in order to fill the form in properly
+    # modify the name into the correct format
     def name_keys(self):
-        name = self.name
-
-        name = name.title()
-        name = name.split()
-
-        return name[0], name[1]
-
-    # used with first and last name ONLY to create user name with domain @teksystemsgs.com.
-    def user_name_keys(self):
         name = self.name
 
         name = name.title()
 
         if "-" in name:
             name = name.replace("-", " ")
-        
+
         name = name.split()
 
-        return f"{name[0]}.{name[-1]}@teksystemsgs.com"
+        return name[0], name[-1]
+
+    # format user name (first + last name) with the domain @teksystemsgs.com.
+    def user_name_keys(self):
+        f_name, l_name = self.name_keys()
+
+        return f"{f_name}.{l_name}@teksystemsgs.com"
     
     # format the project ID to the correct length, only runs if the project ID
     # is incorrect to begin with.
     def format_project_id(self):
         pid = self.pid
-        search = re.match(r'^(0{4})([0-9]{5})$', pid)
+        # 000011111, 9 digits long and first 4 digits must be 0.
+        pid_format = re.compile(r'^(0{4})([0-9]{5})$')
+        counter = 0
+
+        if pid_format.match(pid):
+            self.pid = pid
+        else:
+            if pid[:4] != "0000":
+                for char in pid:
+                    if char == "0":
+                        counter += 1
+
+                        # break out of loop, only the first four characters matter
+                        if counter == 4:
+                            break
+
+                zeroes = 4 - counter
+                prefix = "0" * zeroes
+                pid = prefix + pid
+
+            if len(pid) > 9 or len(pid) < 9:
+                print("WARNING: The project ID in the ticket is incorrect.")
+                print("Please email the CSA for the correct ID.")
+            
+            input("Enter 'enter' to continue.")
+
+                    
+            
+                    

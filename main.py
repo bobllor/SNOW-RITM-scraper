@@ -23,9 +23,7 @@ if __name__ == '__main__':
     # xpath for global search in order to enter the RITM number
     new_user_link = 'https://tek.service-now.com/nav_to.do?uri=%2Fsys_user.do%3Fsys_id%3D-1%26sys_is_list%3Dtrue%26sys_target%3Dsys_user%26sysparm_checked_items%3D%26sysparm_fixed_query%3D%26sysparm_group_sort%3D%26sysparm_list_css%3D%26sysparm_query%3DGOTO123TEXTQUERY321%3DDavid%2BKvachev%26sysparm_referring_url%3Dsys_user_list.do%3Fsysparm_query%3DGOTO123TEXTQUERY321%253DDavid%2BKvachev@99@sysparm_first_row%3D1%26sysparm_target%3D%26sysparm_view%3D'
     
-    # temp variable for testing, remove later
-    count = 0
-    while count < 2:
+    while True:
         ritm = input("Enter an RITM number: ")
         print("Searching for RITM...")
         scraper = ScrapeRITM(driver, ritm)
@@ -41,7 +39,6 @@ if __name__ == '__main__':
         # remove this later, used for debugging purposes
         print(user_info)
 
-        count += 1
         input("Enter 'enter' to continue")
         
         new_user = UserCreation(driver, new_user_link, user_info, name)
@@ -49,6 +46,6 @@ if __name__ == '__main__':
         new_user.format_office_id()
         new_user.create_user()
 
-        input("Enter 'enter' to continue")
+        input("Enter 'enter' to continue.")
 
     driver.quit()
