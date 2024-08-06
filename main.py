@@ -58,6 +58,8 @@ if __name__ == '__main__':
             new_user = UserCreation(driver, new_user_link, user_info, name)
             print("   Creating new user...")
             new_user.create_user()
+
+            input("\n   Press 'enter' to continue.")
         
         os.system('cls')
 

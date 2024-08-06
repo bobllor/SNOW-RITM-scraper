@@ -154,11 +154,13 @@ class ScrapeRITM():
         consultant_xpaths = [email_xpath, eid_xpath]
         user_info = []
 
+        # consultant container, contains employee ID and email address
         for xpath in consultant_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, f"{self.consultant_info_xpath}{xpath}")
             part = element_xpath.get_attribute("value")
             user_info.append(part)
 
+        # company container, contains company information (company name, project ID, office ID)
         company_xpaths = [company_xpath, oid_xpath, pid_xpath]
         for xpath in company_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{xpath}")
@@ -167,6 +169,7 @@ class ScrapeRITM():
             if part != None:
                 user_info.append(part)
         
+        # organization container, contains global services or internal staffing
         element_xpath = self.driver.find_element(By.XPATH, f"{self.org_info_xpath}{org_xpath}")
         part = element_xpath.get_attribute("value")
         user_info.append(part)
@@ -252,7 +255,6 @@ class UserCreation:
         self.driver.find_element(By.ID, "sys_user.u_office_id").send_keys(self.oid)
         
         print("   User created. Please review the information then hit save.")
-        input("Enter 'enter' to continue.")
 
     # extract only the number ID of the oid instance
     def format_office_id(self):
