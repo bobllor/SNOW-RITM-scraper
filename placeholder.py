@@ -273,13 +273,9 @@ class UserCreation:
             self.pid = pid
         else:
             if pid[:4] != "0000":
-                for char in pid:
+                for char in pid[:4]:
                     if char == "0":
                         counter += 1
-
-                        # break out of loop, only the first four characters matter
-                        if counter == 4:
-                            break
 
                 zeroes = 4 - counter
                 prefix = "0" * zeroes
