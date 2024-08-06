@@ -25,7 +25,7 @@ class Login:
 
         self.driver.switch_to.default_content()
         
-        print("Login complete.")
+        print("\n   Login complete.")
         time.sleep(8)
 
 class ScrapeRITM():
@@ -57,7 +57,7 @@ class ScrapeRITM():
 
         time.sleep(10)
 
-        print("RITM search complete.")
+        print("   RITM search complete.")
         # reset search field to prepare it for future queries
         global_search.click()
         global_search.send_keys(Keys.CONTROL + "a")
@@ -70,15 +70,15 @@ class ScrapeRITM():
 
         # returns the REQ number
         req = self.scrape_req()
-        time.sleep(5)
+        time.sleep(2.5)
 
         # returns the full name of the consultant
         name = self.scrape_name()
-        time.sleep(5)
+        time.sleep(2.5)
 
         # returns the address of the consultant
         address = self.scrape_address()
-        time.sleep(5)
+        time.sleep(2.5)
 
         return req, name, address
     
@@ -159,13 +159,17 @@ class ScrapeRITM():
             part = element_xpath.get_attribute("value")
             user_info.append(part)
 
-        company_xpaths = [company_xpath, oid_xpath, pid_xpath, org_xpath]
+        company_xpaths = [company_xpath, oid_xpath, pid_xpath]
         for xpath in company_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{xpath}")
             part = element_xpath.get_attribute("value")
 
             if part != None:
                 user_info.append(part)
+        
+        element_xpath = self.driver.find_element(By.XPATH, f"{self.org_info_xpath}{org_xpath}")
+        part = element_xpath.get_attribute("value")
+        user_info.append(part)
         
         # returns a list in order: email, employee ID, company, office ID, project ID, and organization
         return user_info
@@ -195,29 +199,36 @@ class UserCreation:
 
         self.format_project_id()
         
-        f_name, l_name = self.name_keys()
-
         # consultant information (name + employee ID)
+        f_name, l_name = self.name_keys()
         self.driver.find_element(By.ID, "sys_user.first_name").send_keys(f_name)
+
         time.sleep(1.5)
+
         self.driver.find_element(By.ID, "sys_user.last_name").send_keys(l_name)
+
         time.sleep(1.5)
+
         self.driver.find_element(By.ID, "sys_user.employee_number").send_keys(self.eid)
 
-        time.sleep(1.5)
+        time.sleep(3)
 
-        user_name = self.user_name_keys()
         # email information
         # user_name is the "FIRST.LAST@teksystemsgs.com"
+        user_name = self.user_name_keys(f_name, l_name)
         self.driver.find_element(By.ID, "sys_user.user_name").send_keys(user_name)
+
         time.sleep(1.5)
+
         self.driver.find_element(By.ID, "sys_user.email").send_keys(self.email)
+
         time.sleep(1.5)
+
         self.driver.find_element(By.ID, "sys_user.u_personal_e_mail").send_keys(self.email)
 
         time.sleep(2)
         # NOTE: the company names in aerotek_list deviates from the standard
-        # user creation, look for conditionals and aerotek_list.
+        # user creation, look for conditionals.
         # TODO: set up aerotek organizations requirements.
         aerotek_list = ["Aerotek", "Aston Carter", "Actalent"]
         # check what the selected organization is, GS requires "0000xxxxx" and other selections
@@ -225,15 +236,23 @@ class UserCreation:
         if self.org != "GS":
             if self.org == "Staffing":
                 self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys("TEKSTAFFING")
+
+            if self.org in aerotek_list:
+                self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.org)
         else:
             self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.pid)
+
         time.sleep(1.5)
+
         self.driver.find_element(By.ID, "sys_display.sys_user.company").send_keys(self.company)
+
         time.sleep(1.5)
+
+        self.format_office_id()
         self.driver.find_element(By.ID, "sys_user.u_office_id").send_keys(self.oid)
         
-        print("User created. Please review the information then hit save.")
-        time.sleep(5)
+        print("   User created. Please review the information then hit save.")
+        input("Enter 'enter' to continue.")
 
     # extract only the number ID of the oid instance
     def format_office_id(self):
@@ -256,17 +275,15 @@ class UserCreation:
         return name[0], name[-1]
 
     # format user name (first + last name) with the domain @teksystemsgs.com.
-    def user_name_keys(self):
-        f_name, l_name = self.name_keys()
-
+    def user_name_keys(self, f_name, l_name):
         return f"{f_name}.{l_name}@teksystemsgs.com"
     
     # format the project ID to the correct length, only runs if the project ID
     # is incorrect to begin with.
     def format_project_id(self):
         pid = self.pid
-        # 000011111, 9 digits long and first 4 digits must be 0.
-        pid_format = re.compile(r'^(0{4})([0-9]{5})$')
+        # 000011111(1), 9-10 digits long and first 4 digits must be 0.
+        pid_format = re.compile(r'^(0{4})([0-9]{5,6})$')
         counter = 0
 
         if pid_format.match(pid):
@@ -281,11 +298,11 @@ class UserCreation:
                 prefix = "0" * zeroes
                 pid = prefix + pid
 
-            if len(pid) > 9 or len(pid) < 9:
+            '''if len(pid) > 10 or len(pid) < 9:
                 print("WARNING: The project ID in the ticket is incorrect.")
                 print("Please email the CSA for the correct ID.")
             
-            input("Enter 'enter' to continue.")
+            input("Enter 'enter' to continue.")'''
 
                     
             

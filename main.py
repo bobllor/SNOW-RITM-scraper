@@ -1,6 +1,7 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from placeholder import Login, ScrapeRITM, UserCreation
+import menu, os, time
 from acc import get_accs
 
 if __name__ == '__main__':
@@ -14,8 +15,9 @@ if __name__ == '__main__':
     user, pw = get_accs()
     login_link = "https://tek.service-now.com/navpage.do"
     login = Login(driver, login_link, user, pw)
-    print("Logging in...")
+    print("\n   Logging in...")
     login.login_sn()
+    os.system('cls')
 
     # TODO: create a while loop
     # TODO: input to choose either user creation or label generation (WIP)
@@ -24,28 +26,40 @@ if __name__ == '__main__':
     new_user_link = 'https://tek.service-now.com/nav_to.do?uri=%2Fsys_user.do%3Fsys_id%3D-1%26sys_is_list%3Dtrue%26sys_target%3Dsys_user%26sysparm_checked_items%3D%26sysparm_fixed_query%3D%26sysparm_group_sort%3D%26sysparm_list_css%3D%26sysparm_query%3DGOTO123TEXTQUERY321%3DDavid%2BKvachev%26sysparm_referring_url%3Dsys_user_list.do%3Fsysparm_query%3DGOTO123TEXTQUERY321%253DDavid%2BKvachev@99@sysparm_first_row%3D1%26sysparm_target%3D%26sysparm_view%3D'
     
     while True:
-        ritm = input("Enter an RITM number: ")
-        print("Searching for RITM...")
-        scraper = ScrapeRITM(driver, ritm)
-        scraper.search_ritm()
+        choice = menu.main_menu()
 
-        req, name, address = scraper.scrape_ritm()
-        print("Obtaining information for label creation...")
-        # remove this later, used for debugging purposes
-        print(f"{ritm} {req} {name} {address}")
-
-        user_info = scraper.scrape_user_info()
-        print("Obtaining information for user creation...")
-        # remove this later, used for debugging purposes
-        print(user_info)
-
-        input("Enter 'enter' to continue")
+        if choice == 'c':
+            break
         
-        new_user = UserCreation(driver, new_user_link, user_info, name)
-        print("Creating new user...")
-        new_user.format_office_id()
-        new_user.create_user()
+        os.system('cls')
+        ritm = input("\n   Enter an RITM number: ")
+        print("\n   Searching for RITM...")
+        scraper = ScrapeRITM(driver, ritm)
 
-        input("Enter 'enter' to continue.")
+        if choice == 'a':
+            print("\n   Work in progress")
+            time.sleep(4)
 
+            #print("Obtaining information for label creation...")
+        
+            '''req, name, address = scraper.scrape_ritm()
+            # remove this later, used for debugging purposes
+            print(f"{ritm} {req} {name} {address}")'''
+        
+        if choice == 'b':
+            scraper.search_ritm()
+
+            print("\n   Obtaining information for user creation...")
+            req, name, address = scraper.scrape_ritm()
+            user_info = scraper.scrape_user_info()
+            # remove this later, used for debugging purposes
+            print(user_info)
+            
+            new_user = UserCreation(driver, new_user_link, user_info, name)
+            print("   Creating new user...")
+            new_user.create_user()
+        
+        os.system('cls')
+
+    # while loop exit
     driver.quit()
