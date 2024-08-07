@@ -63,8 +63,7 @@ class ScrapeRITM():
         global_search.send_keys(Keys.CONTROL + "a")
         global_search.send_keys(Keys.DELETE)
     
-    # TODO: link this file to my fedex label generator, eliminating
-    # the need for manual input (except RITM ticket)
+    # NOTE: this function alone can be used to generate a label with my FedEx label program.
     def scrape_ritm(self):
         self.driver.switch_to.frame("gsft_main")
 
@@ -83,21 +82,24 @@ class ScrapeRITM():
         return req, name, address
     
     def scrape_name(self):
+        self.driver.switch_to.frame("gsft_main")
+
         # xpath of first and last name child containers
         fn_xpath = '//tr[1]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
         ln_xpath = '//tr[2]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
         name_xpaths = [f"{self.consultant_info_xpath}{fn_xpath}", 
                             f"{self.consultant_info_xpath}{ln_xpath}"]
         
-        name = []
-        # get the value from the xpath, strip any whitespace
-        # and append to a list which then forms a string
+        names = []
         for xpath in name_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, xpath)
-            part = element_xpath.get_attribute("value").strip()
-            name.append(part)
+            part = element_xpath.get_attribute("value")
+            names.append(part)
         
-        return " ".join(name)
+        for index, name in enumerate(names):
+            names[index] = name.strip().title()
+        
+        return " ".join(names)
     
     def scrape_address(self):
         # xpath of container that holds all address info
@@ -132,15 +134,27 @@ class ScrapeRITM():
         return req
     
     def scrape_user_info(self):
-        # consultant's company xpaths
-        oid_xpath = '//tr[24]//input[@class="questionsetreference form-control element_reference_input"]'
+        # organization container, contains global services, staffing, or aerotek orgs
+        org_xpath = '//option[contains(@selected, "SELECTED")]'
+        org_ele_xpath = self.driver.find_element(By.XPATH, f"{self.org_info_xpath}{org_xpath}")
+        org = org_ele_xpath.get_attribute("value")
+
+        # special aerotek orgs that creates additional fields inside the ticket
+        # pushing down certain xpaths for fields.
+        aerotek_list = ["Aerotek", "Aston Carter", "Actalent"]
+
+        # consultant's company xpaths.
+        if org in aerotek_list :
+            oid_xpath = '//tr[25]//input[@class="cat_item_option sc-content-pad form-control"]'
+        else:
+            oid_xpath = '//tr[24]//input[@class="questionsetreference form-control element_reference_input"]'
         pid_xpath = '//tr[7]//input[@class="cat_item_option sc-content-pad form-control"]'
 
         # CHECKS IF CID CONTAINS ANYTHING OTHER THAN A NUMBER.
-        # this is needed because if "New Customer/Not LIsted" is selected then multiple XPATHS are
+        # this is needed because if "New Customer/Not Listed" is selected then multiple XPATHS are
         # positioned in different locations due to an additional field form appearing.
         cid_xpath = '//tr[19]//input[@class="questionsetreference form-control element_reference_input"]'
-        customer_id_values = ["New Customer", "Not Listed"]
+        customer_id_values = ["New Customer", "Not Listed", "Not Listed"]
         if self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value") in customer_id_values:
             company_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
         else:
@@ -149,7 +163,6 @@ class ScrapeRITM():
         # consultant info xpaths
         email_xpath = '//tr[3]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
         eid_xpath = '//tr[4]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
-        org_xpath = '//option[contains(@selected, "SELECTED")]'
 
         consultant_xpaths = [email_xpath, eid_xpath]
         user_info = []
@@ -158,6 +171,7 @@ class ScrapeRITM():
         for xpath in consultant_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, f"{self.consultant_info_xpath}{xpath}")
             part = element_xpath.get_attribute("value")
+
             user_info.append(part)
 
         # company container, contains company information (company name, project ID, office ID)
@@ -166,13 +180,16 @@ class ScrapeRITM():
             element_xpath = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{xpath}")
             part = element_xpath.get_attribute("value")
 
-            if part != None:
-                user_info.append(part)
-        
-        # organization container, contains global services or internal staffing
-        element_xpath = self.driver.find_element(By.XPATH, f"{self.org_info_xpath}{org_xpath}")
-        part = element_xpath.get_attribute("value")
-        user_info.append(part)
+            user_info.append(part)
+
+        # append organzation last to the list
+        user_info.append(org)
+
+        if org in aerotek_list:
+            if org == "Actalent":
+                org = "ACTALENT"
+            user_info[2] = org
+            user_info[4] = org
         
         # returns a list in order: email, employee ID, company, office ID, project ID, and organization
         return user_info

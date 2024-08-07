@@ -1,7 +1,7 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from placeholder import Login, ScrapeRITM, UserCreation
-import menu, os, time
+import menu, os, time, re
 from acc import get_accs
 
 if __name__ == '__main__':
@@ -19,7 +19,6 @@ if __name__ == '__main__':
     login.login_sn()
     os.system('cls')
 
-    # TODO: create a while loop
     # TODO: input to choose either user creation or label generation (WIP)
     # search for an RITM ticket and scrape the info on the ticket
     # xpath for global search in order to enter the RITM number
@@ -32,10 +31,28 @@ if __name__ == '__main__':
             break
         
         os.system('cls')
-        ritm = input("\n   Enter an RITM number: ")
+        print("\n   ENTER AN RITM NUMBER")
+        print("\n   Valid inputs: RITM1234567 | 1234567")
+        ritm = input("\n   Enter an RITM to search: ")
+        ritm_checker = re.compile(r'^([RITM]{4})([0-9]{7})\b')
+
+        if ritm.isdigit() and len(ritm) == 7:
+            ritm = 'RITM' + ritm
+
+        while True:
+            os.system('cls')
+            if ritm_checker.match(ritm):
+                break
+            else:
+                print("\n   RITM number format is wrong.")
+                print("\n   Valid inputs: RITM1234567 | 1234567")
+                ritm = input("\n   Enter an RITM number: ")
+
         print("\n   Searching for RITM...")
         scraper = ScrapeRITM(driver, ritm)
 
+        # TODO: tie in with my fedex label maker
+        # FedEx requirements: RITM, REQ, address, and name.
         if choice == 'a':
             print("\n   Work in progress")
             time.sleep(4)
@@ -50,10 +67,10 @@ if __name__ == '__main__':
             scraper.search_ritm()
 
             print("\n   Obtaining information for user creation...")
-            req, name, address = scraper.scrape_ritm()
+            name = scraper.scrape_name()
             user_info = scraper.scrape_user_info()
             # remove this later, used for debugging purposes
-            print(user_info)
+            print("   DEBUG:", user_info, name)
             
             new_user = UserCreation(driver, new_user_link, user_info, name)
             print("   Creating new user...")
