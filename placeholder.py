@@ -331,12 +331,8 @@ class UserCreation:
                 prefix = "0" * zeroes
                 pid = prefix + pid
 
-            '''if len(pid) > 10 or len(pid) < 9:
-                print("WARNING: The project ID in the ticket is incorrect.")
-                print("Please email the CSA for the correct ID.")
+            if len(pid) > 10 or len(pid) < 9:
+                print("\n   WARNING: The project ID in the ticket is incorrect.")
+                print("   Input the project ID manually or email the CSA for the correct ID.")
             
-            input("Enter 'enter' to continue.")'''
-
-                    
-            
-                    
+            input("   Enter 'enter' to continue.")

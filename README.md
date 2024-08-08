@@ -1,4 +1,3 @@
-
 # About the Project
 
 SNOW RITM scraper which takes an RITM ticket number and scrapes the information from the ticket, returning back information that the user can use through Selenium.
