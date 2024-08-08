@@ -231,6 +231,8 @@ class UserCreation:
 
         # TODO: create full user creation automation
         # check save_and_fill_user function below for progress
+        self.save_and_fill_user()
+        self.fill_user(f_name, l_name)
         print("   User created. Please review the information then hit save.")
     
     # fills in consultant first name, last name, and their employee ID.
@@ -253,15 +255,22 @@ class UserCreation:
     def send_email_keys(self, user_name):
         self.driver.find_element(By.ID, "sys_user.user_name").send_keys(user_name)
         time.sleep(1.5)
-        self.driver.find_element(By.ID, "sys_user.email").send_keys(self.email)
+        
+        # mutable variables in case of a bad email input.
+        email_key = self.email
+        personal_key = self.email
+        
+        if self.email.upper() == 'TBD' or self.email == '':
+            email_key = user_name
+            personal_key = ''
+
+        self.driver.find_element(By.ID, "sys_user.email").send_keys(email_key)
         time.sleep(1.5)
-        self.driver.find_element(By.ID, "sys_user.u_personal_e_mail").send_keys(self.email)
+        self.driver.find_element(By.ID, "sys_user.u_personal_e_mail").send_keys(personal_key)
         time.sleep(2)
 
     # fills in project ID, company name, and office ID.
     def send_org_keys(self, aerotek_list):
-        self.format_project_id()
-
         # check what the selected organization is, GS requires "0000xxxxx" and other selections
         # uses unique project IDs related to their name, i.e. Staffing = TEKSTAFFING.
         if self.org != "GS":
@@ -271,6 +280,7 @@ class UserCreation:
                 if self.org in aerotek_list:
                     self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.org)
         else:
+            self.format_project_id()
             self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.pid)
         time.sleep(1.5)
 
@@ -280,14 +290,70 @@ class UserCreation:
         self.format_office_id()
         self.driver.find_element(By.ID, "sys_user.u_office_id").send_keys(self.oid)
     
-    # final step in automating user creation
     def save_and_fill_user(self):
-        # TODO: XPATH + click() to save the user.
         # TODO: go to users page, search the name of the user, wait 20 seconds, check if user appears
-        # TODO: fill in the fields of said user, find XPATH of the correct username and fields to send the keys
+        # TODO: fill in the fields of user, find XPATH of the correct username and fields to send the keys
         # TODO: fields include customer ID, office ID, and office location
         # TODO: check for errors during user creation: incorrect PID, incorrect company, duplicate username, incorrect email
-        pass
+        save_btn_xpath = '//button[@id="sysverb_insert_and_stay"]'
+        time.sleep(5)
+
+        self.driver.find_element(By.XPATH, save_btn_xpath).click()
+
+        time.sleep(3)
+
+        errors = self.user_error_msg_check()
+
+        print(f"\n   DEBUG (Class UserCreation - save_and_fill_user(self)): {errors}")
+
+        time.sleep(3)
+
+        # if errors is empty, then continue with the rest of the fields 
+        if errors == []:
+            pass
+        else:
+            pass
+
+    def fill_user(self, f_name, l_name):
+        user_link = 'https://tek.service-now.com/nav_to.do?uri=%2Fsys_user_list.do%3Fsysparm_clear_stack%3Dtrue%26sysparm_userpref_module%3D62354a4fc0a801941509bc63f8c4b979'
+
+        self.driver.get(user_link)
+        self.driver.switch_to.frame("gsft_main")
+
+        search = '//input[@type="search"]'
+
+        # long wait time due to SNOW's slow updating, can't do anything about it.
+        time.sleep(20)
+        user_search = self.driver.find_element(By.XPATH, search)
+        user_search.send_keys(f"{f_name} {l_name}")
+        user_search.send_keys(Keys.ENTER)
+
+        input("Press 'enter' to continue.")
+        
+
+    
+    def user_error_msg_check(self):
+        # error messages, used to check if an error message is present.
+        error_list = ['The following mandatory fields are not filled in: Company',
+                      'Invalid insert',
+                      'Unique Key violation detected by database']
+        errors = []
+        
+        # if an error message exists, return the object type.
+        # error_hide returns a list of objects if found
+        error_hide = self.driver.find_elements(By.XPATH, '//div[@class="outputmsg_container outputmsg_hide"]')
+
+        # if error_hide contains at least 1 element, then there are no error messages and return an empty list
+        if len(error_hide) >= 1:
+            return errors
+        
+        if error_hide != []:
+            for error in error_list:
+                error_xpath = self.driver.find_elements(By.NAME, error)
+                error_msg = self.driver.get_attribute()
+                error_xpath.append(error_msg)
+        
+        return errors
 
     # extract only the number ID of the oid instance
     def format_office_id(self):
@@ -329,10 +395,4 @@ class UserCreation:
 
                 zeroes = 4 - counter
                 prefix = "0" * zeroes
-                pid = prefix + pid
-
-            if len(pid) > 10 or len(pid) < 9:
-                print("\n   WARNING: The project ID in the ticket is incorrect.")
-                print("   Input the project ID manually or email the CSA for the correct ID.")
-            
-            input("   Enter 'enter' to continue.")
+                self.pid = prefix + pid

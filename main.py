@@ -36,7 +36,7 @@ if __name__ == '__main__':
         ritm = input("\n   Enter an RITM to search: ")
         ritm_checker = re.compile(r'^([RITM]{4})([0-9]{7})\b')
 
-        if ritm.isdigit() and len(ritm) == 7:
+        if ritm.isdigit():
             ritm = 'RITM' + ritm
 
         while True:
