@@ -99,7 +99,7 @@ class ScrapeRITM():
         for index, name in enumerate(names):
             names[index] = name.strip().title()
         
-        return " ".join(names)
+        return names
     
     def scrape_address(self):
         # xpath of container that holds all address info
@@ -217,88 +217,102 @@ class UserCreation:
 
         self.driver.switch_to.frame("gsft_main")
 
-        self.format_project_id()
-        
-        # consultant information (name + employee ID)
+        self.send_consultant_keys()
+
+        # email keys
         f_name, l_name = self.name_keys()
-        self.driver.find_element(By.ID, "sys_user.first_name").send_keys(f_name)
-
-        time.sleep(1.5)
-
-        self.driver.find_element(By.ID, "sys_user.last_name").send_keys(l_name)
-
-        time.sleep(1.5)
-
-        self.driver.find_element(By.ID, "sys_user.employee_number").send_keys(self.eid)
-
-        time.sleep(3)
-
-        # email information
-        # user_name is the "FIRST.LAST@teksystemsgs.com"
         user_name = self.user_name_keys(f_name, l_name)
-        self.driver.find_element(By.ID, "sys_user.user_name").send_keys(user_name)
+        self.send_email_keys(user_name)
 
-        time.sleep(1.5)
-
-        self.driver.find_element(By.ID, "sys_user.email").send_keys(self.email)
-
-        time.sleep(1.5)
-
-        self.driver.find_element(By.ID, "sys_user.u_personal_e_mail").send_keys(self.email)
-
-        time.sleep(2)
         # NOTE: the company names in aerotek_list deviates from the standard
         # user creation, look for conditionals.
-        # TODO: set up aerotek organizations requirements.
         aerotek_list = ["Aerotek", "Aston Carter", "Actalent"]
+        self.send_org_keys(aerotek_list)
+
+        # TODO: create full user creation automation
+        # check save_and_fill_user function below for progress
+        print("   User created. Please review the information then hit save.")
+    
+    # fills in consultant first name, last name, and their employee ID.
+    def send_consultant_keys(self):
+        self.driver.find_element(By.ID, "sys_user.first_name").send_keys(self.name[0])
+        time.sleep(1.5)
+        self.driver.find_element(By.ID, "sys_user.last_name").send_keys(self.name[1])
+        time.sleep(1.5)
+
+        # determine if employee ID needs to fill in TBD
+        if self.eid.islower():
+            self.eid = self.eid.upper()
+        elif self.eid == '' or self.eid.strip('0') == '':
+            self.eid = 'TBD'
+
+        self.driver.find_element(By.ID, "sys_user.employee_number").send_keys(self.eid)
+        time.sleep(3)
+    
+    # fills in username (first.last@teksystemsgs.com), and their personal email.
+    def send_email_keys(self, user_name):
+        self.driver.find_element(By.ID, "sys_user.user_name").send_keys(user_name)
+        time.sleep(1.5)
+        self.driver.find_element(By.ID, "sys_user.email").send_keys(self.email)
+        time.sleep(1.5)
+        self.driver.find_element(By.ID, "sys_user.u_personal_e_mail").send_keys(self.email)
+        time.sleep(2)
+
+    # fills in project ID, company name, and office ID.
+    def send_org_keys(self, aerotek_list):
+        self.format_project_id()
+
         # check what the selected organization is, GS requires "0000xxxxx" and other selections
         # uses unique project IDs related to their name, i.e. Staffing = TEKSTAFFING.
         if self.org != "GS":
-            if self.org == "Staffing":
-                self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys("TEKSTAFFING")
+                if self.org == "Staffing":
+                    self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys("TEKSTAFFING")
 
-            if self.org in aerotek_list:
-                self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.org)
+                if self.org in aerotek_list:
+                    self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.org)
         else:
             self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.pid)
-
         time.sleep(1.5)
 
         self.driver.find_element(By.ID, "sys_display.sys_user.company").send_keys(self.company)
-
         time.sleep(1.5)
 
         self.format_office_id()
         self.driver.find_element(By.ID, "sys_user.u_office_id").send_keys(self.oid)
-        
-        print("   User created. Please review the information then hit save.")
+    
+    # final step in automating user creation
+    def save_and_fill_user(self):
+        # TODO: XPATH + click() to save the user.
+        # TODO: go to users page, search the name of the user, wait 20 seconds, check if user appears
+        # TODO: fill in the fields of said user, find XPATH of the correct username and fields to send the keys
+        # TODO: fields include customer ID, office ID, and office location
+        # TODO: check for errors during user creation: incorrect PID, incorrect company, duplicate username, incorrect email
+        pass
 
     # extract only the number ID of the oid instance
     def format_office_id(self):
         full_oid = self.oid
         full_oid = full_oid.split("-")
 
-        self.oid = full_oid[0]
+        self.oid = full_oid[0].strip()
     
     # modify the name into the correct format
     def name_keys(self):
         name = self.name
-
-        name = name.title()
+        name = " ".join(name)
 
         if "-" in name:
             name = name.replace("-", " ")
 
         name = name.split()
 
+        # name keys will always be the first and last name, regardless of X middle names.
         return name[0], name[-1]
 
-    # format user name (first + last name) with the domain @teksystemsgs.com.
+    # username of the consultant for logging in, uses @teksystemsgs.com domain.
     def user_name_keys(self, f_name, l_name):
         return f"{f_name}.{l_name}@teksystemsgs.com"
     
-    # format the project ID to the correct length, only runs if the project ID
-    # is incorrect to begin with.
     def format_project_id(self):
         pid = self.pid
         # 000011111(1), 9-10 digits long and first 4 digits must be 0.
@@ -308,7 +322,7 @@ class UserCreation:
         if pid_format.match(pid):
             self.pid = pid
         else:
-            if pid[:4] != "0000":
+            if pid.startswith("0000") is False:
                 for char in pid[:4]:
                     if char == "0":
                         counter += 1
