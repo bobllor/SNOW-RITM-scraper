@@ -305,6 +305,7 @@ class UserCreation:
         errors = self.user_error_msg_check()
 
         print(f"\n   DEBUG (Class UserCreation - save_and_fill_user(self)): {errors}")
+        input('\n   Press "enter" to continue.')
 
         time.sleep(3)
 
@@ -331,7 +332,7 @@ class UserCreation:
         input("Press 'enter' to continue.")
         
 
-    
+
     def user_error_msg_check(self):
         # error messages, used to check if an error message is present.
         error_list = ['The following mandatory fields are not filled in: Company',
@@ -341,18 +342,15 @@ class UserCreation:
         
         # if an error message exists, return the object type.
         # error_hide returns a list of objects if found
-        error_hide = self.driver.find_elements(By.XPATH, '//div[@class="outputmsg_container outputmsg_hide"]')
+        for error in error_list:
+            part = self.driver.find_elements(By.XPATH, f'//div[contains(text(), "{error}")]')
+            if part != []:
+                error_msg = part[0].text
+                errors.append(error_msg)
+        
+        # ignore
+        # //div[@class="outputmsg_container outputmsg_hide"]
 
-        # if error_hide contains at least 1 element, then there are no error messages and return an empty list
-        if len(error_hide) >= 1:
-            return errors
-        
-        if error_hide != []:
-            for error in error_list:
-                error_xpath = self.driver.find_elements(By.NAME, error)
-                error_msg = self.driver.get_attribute()
-                error_xpath.append(error_msg)
-        
         return errors
 
     # extract only the number ID of the oid instance
