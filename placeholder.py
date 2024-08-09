@@ -1,7 +1,8 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-import time
-import re
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.common.exceptions import NoSuchElementException
+import time, re
 
 class Login:
     def __init__(self, driver, link, user, pw):
@@ -33,10 +34,8 @@ class ScrapeRITM():
         self.driver = driver
         self.ritm = ritm
 
-        # global search xpath
-        self.search_xpath = '//input[@name="sysparm_search"]'
+        self.global_search_xpath = '//input[@name="sysparm_search"]'
 
-        # xpath of RITM tickets
         # these are containers that need to be accessed before being able to grab the values
         self.consultant_info_xpath = '//tr[@id="element.container_23caec60e17c4a00c2ab91d15440c5ee"]'
         self.address_info_xpath = '//tr[@id="element.container_66291a0ae1fc8a00c2ab91d15440c5c2"]'
@@ -51,7 +50,7 @@ class ScrapeRITM():
         self.driver.switch_to.default_content()
         
         # search for global search bar and query the site for an RITM ticket
-        global_search = self.driver.find_element(By.XPATH, self.search_xpath)
+        global_search = self.driver.find_element(By.XPATH, self.global_search_xpath)
         global_search.send_keys(self.ritm)
         global_search.send_keys(Keys.ENTER)
 
@@ -154,8 +153,9 @@ class ScrapeRITM():
         # this is needed because if "New Customer/Not Listed" is selected then multiple XPATHS are
         # positioned in different locations due to an additional field form appearing.
         cid_xpath = '//tr[19]//input[@class="questionsetreference form-control element_reference_input"]'
-        customer_id_values = ["New Customer", "Not Listed", "Not Listed"]
+        customer_id_values = ["New Customer", "Not Listed", "Not Listed - Not Listed"]
         if self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value") in customer_id_values:
+            cid_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
             company_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
         else:
             company_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
@@ -163,8 +163,9 @@ class ScrapeRITM():
         # consultant info xpaths
         email_xpath = '//tr[3]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
         eid_xpath = '//tr[4]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
+        div_xpath = '//option[contains(@selected, "SELECTED")]'
 
-        consultant_xpaths = [email_xpath, eid_xpath]
+        consultant_xpaths = [email_xpath, eid_xpath, div_xpath]
         user_info = []
 
         # consultant container, contains employee ID and email address
@@ -175,7 +176,7 @@ class ScrapeRITM():
             user_info.append(part)
 
         # company container, contains company information (company name, project ID, office ID)
-        company_xpaths = [company_xpath, oid_xpath, pid_xpath]
+        company_xpaths = [cid_xpath, company_xpath, oid_xpath, pid_xpath]
         for xpath in company_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{xpath}")
             part = element_xpath.get_attribute("value")
@@ -189,9 +190,10 @@ class ScrapeRITM():
             if org == "Actalent":
                 org = "ACTALENT"
             user_info[2] = org
+            user_info[3] = org
             user_info[4] = org
         
-        # returns a list in order: email, employee ID, company, office ID, project ID, and organization
+        # returns a list: email, employee ID, division, customer ID, company, office ID, project ID, and organization
         return user_info
         
 # NOTE: still requires manual input in saving and other missing information
@@ -205,10 +207,15 @@ class UserCreation:
         # company info, instances are initialized from a list
         self.email = user_info[0]
         self.eid = user_info[1]
-        self.company = user_info[2]
-        self.oid = user_info[3]
-        self.pid = user_info[4]
-        self.org = user_info[5]
+        self.div = user_info[2]
+        self.cid = user_info[3]
+        self.company = user_info[4]
+        self.oid = user_info[5]
+        self.pid = user_info[6]
+        self.org = user_info[7]
+
+        # initialized in a future function call
+        self.oid_location = ""
 
     def create_user(self):
         self.driver.get(self.link)
@@ -221,19 +228,23 @@ class UserCreation:
 
         # email keys
         f_name, l_name = self.name_keys()
-        user_name = self.user_name_keys(f_name, l_name)
+        user_name = f"{f_name}.{l_name}@teksystemsgs.com"
         self.send_email_keys(user_name)
 
-        # NOTE: the company names in aerotek_list deviates from the standard
-        # user creation, look for conditionals.
+        # NOTE: these comapnies deviates from the standard user creation.
         aerotek_list = ["Aerotek", "Aston Carter", "Actalent"]
         self.send_org_keys(aerotek_list)
 
         # TODO: create full user creation automation
         # check save_and_fill_user function below for progress
-        self.save_and_fill_user()
-        self.fill_user(f_name, l_name)
-        print("   User created. Please review the information then hit save.")
+        cancel = self.save_user()
+        if cancel == False:
+            self.fill_user(user_name)
+            print("   User created. Please double check the information before continuing")
+        else:
+            self.search_user_list(user_name, 3)
+            print("\n   NEW USER CREATION CANCELED.")
+        
     
     # fills in consultant first name, last name, and their employee ID.
     def send_consultant_keys(self):
@@ -290,10 +301,7 @@ class UserCreation:
         self.format_office_id()
         self.driver.find_element(By.ID, "sys_user.u_office_id").send_keys(self.oid)
     
-    def save_and_fill_user(self):
-        # TODO: go to users page, search the name of the user, wait 20 seconds, check if user appears
-        # TODO: fill in the fields of user, find XPATH of the correct username and fields to send the keys
-        # TODO: fields include customer ID, office ID, and office location
+    def save_user(self):
         # TODO: check for errors during user creation: incorrect PID, incorrect company, duplicate username, incorrect email
         save_btn_xpath = '//button[@id="sysverb_insert_and_stay"]'
         time.sleep(5)
@@ -304,37 +312,81 @@ class UserCreation:
 
         errors = self.user_error_msg_check()
 
-        print(f"\n   DEBUG (Class UserCreation - save_and_fill_user(self)): {errors}")
-        input('\n   Press "enter" to continue.')
+        print(f"\n   DEBUG (Class UserCreation: errors @ save_user(self)): {errors}")
+        print("   TO DO: do stuff with error checking. yeah!")
 
         time.sleep(3)
 
-        # if errors is empty, then continue with the rest of the fields 
         if errors == []:
-            pass
+            return False
         else:
-            pass
+            print("\n   WARNING: An error has occurred with creating a new user.")
+            print("   The automatation will stop here, manual input to finish the user is required.")
+            print("   A search of the user will occur in the Users List.")
+            input("   Press 'enter' to continue.")
 
-    def fill_user(self, f_name, l_name):
+            return True
+    
+    def search_user_list(self, user_name, time_to_wait):
         user_link = 'https://tek.service-now.com/nav_to.do?uri=%2Fsys_user_list.do%3Fsysparm_clear_stack%3Dtrue%26sysparm_userpref_module%3D62354a4fc0a801941509bc63f8c4b979'
 
+        print("\n   Searching for user...")
+
         self.driver.get(user_link)
+        time.sleep(5)
         self.driver.switch_to.frame("gsft_main")
 
         search = '//input[@type="search"]'
 
         # long wait time due to SNOW's slow updating, can't do anything about it.
-        time.sleep(20)
+        time.sleep(time_to_wait)
         user_search = self.driver.find_element(By.XPATH, search)
-        user_search.send_keys(f"{f_name} {l_name}")
+        user_search.send_keys(user_name)
         user_search.send_keys(Keys.ENTER)
 
-        input("Press 'enter' to continue.")
-        
+    def fill_user(self, user_name):
+        self.search_user_list(user_name, 20)
 
+        print("\n   User search completed.")
+        # to access each cell: /td[X]
+        # start on the 6th cell and end on the 11th
+        user_cell_xpath = '//tbody[@class="list2_body"]'
+        user_cells = []
+        for i in range(6, 11):
+            if i != 8:
+                user_cell = f'{user_cell_xpath}//td[{i}]'
+                user_cells.append(user_cell)
+        
+        elements = []
+        for path in user_cells:
+            element_xpath = self.driver.find_element(By.XPATH, path)
+            elements.append(element_xpath)
+
+        time.sleep(5)
+        print("\n   Inserting in consultant values...")
+
+        # ORDER: customer ID, office number, office location, division
+        keys_to_send = [self.cid, self.oid, self.oid_location, self.div]
+
+        try:
+            count = 0
+            for key in keys_to_send:
+                ActionChains(self.driver).double_click(elements[count]).perform()
+                time.sleep(2.5)
+                cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="cell_edit_value"]')
+                cell_edit_value.send_keys(key)
+                time.sleep(2.5)
+                cell_edit_value.send_keys(Keys.ENTER)
+                time.sleep(3)
+
+                count += 1
+        except:
+            raise NoSuchElementException
+        
+        print("\n   Task completed.")
+        time.sleep(5)
 
     def user_error_msg_check(self):
-        # error messages, used to check if an error message is present.
         error_list = ['The following mandatory fields are not filled in: Company',
                       'Invalid insert',
                       'Unique Key violation detected by database']
@@ -343,9 +395,9 @@ class UserCreation:
         # if an error message exists, return the object type.
         # error_hide returns a list of objects if found
         for error in error_list:
-            part = self.driver.find_elements(By.XPATH, f'//div[contains(text(), "{error}")]')
-            if part != []:
-                error_msg = part[0].text
+            element_xpath = self.driver.find_elements(By.XPATH, f'//span[contains(text(), "{error}")]')
+            if element_xpath:
+                error_msg = element_xpath[0].text
                 errors.append(error_msg)
         
         # ignore
@@ -359,6 +411,7 @@ class UserCreation:
         full_oid = full_oid.split("-")
 
         self.oid = full_oid[0].strip()
+        self.oid_location = full_oid[-1].strip()
     
     # modify the name into the correct format
     def name_keys(self):
@@ -372,10 +425,6 @@ class UserCreation:
 
         # name keys will always be the first and last name, regardless of X middle names.
         return name[0], name[-1]
-
-    # username of the consultant for logging in, uses @teksystemsgs.com domain.
-    def user_name_keys(self, f_name, l_name):
-        return f"{f_name}.{l_name}@teksystemsgs.com"
     
     def format_project_id(self):
         pid = self.pid
