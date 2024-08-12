@@ -48,6 +48,7 @@ if __name__ == '__main__':
                 print("\n   Valid inputs: RITM1234567 | 1234567")
                 ritm = input("\n   Enter an RITM number: ")
 
+        # TODO: make a try-except catch for bad RITM input
         print("\n   Searching for RITM...")
         scraper = ScrapeRITM(driver, ritm)
 
@@ -74,6 +75,7 @@ if __name__ == '__main__':
             
             new_user = UserCreation(driver, new_user_link, user_info, name)
             print("   Creating new user...")
+            time.sleep(3)
             new_user.create_user()
 
             input("\n   Press 'enter' to continue.")
