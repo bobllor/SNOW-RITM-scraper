@@ -72,9 +72,11 @@ if __name__ == '__main__':
             user_info = scraper.scrape_user_info()
             # remove this later, used for debugging purposes
             print("   DEBUG:", user_info, name)
+            time.sleep(2)
+            print('   Complete.')
             
             new_user = UserCreation(driver, new_user_link, user_info, name)
-            print("   Creating new user...")
+            print("\n   Starting user creation process.")
             time.sleep(3)
             new_user.create_user()
 
