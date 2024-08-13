@@ -37,9 +37,9 @@ python -m pip install python-dotenv
    ```
 2. Install required libraries
 3. Enter the username and password in .env_sample.txt.
-  ```
-  sn_u = "ENTER_USERNAME_HERE"
-  sn_p = "ENTER_PASSWORD_HERE"
-  ```
+   ```
+   sn_u = "ENTER_USERNAME_HERE"
+   sn_p = "ENTER_PASSWORD_HERE"
+   ```
 4. Remove _sample.txt from .env_sample.txt
 5. Run main.py
