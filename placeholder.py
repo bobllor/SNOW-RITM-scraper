@@ -1,7 +1,7 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import NoSuchElementException, NoAlertPresentException
+from selenium.common.exceptions import NoSuchElementException
 import time, re
 
 class Login:
@@ -196,8 +196,7 @@ class ScrapeRITM():
         # returns a list: email, employee ID, division, customer ID, company, office ID, project ID, and organization
         return user_info
         
-# NOTE: still requires manual input in saving and other missing information
-# that requires interaction with the SNOW UI.
+# NOTE: still requires manual input in certain aspects of the program.
 class UserCreation:
     def __init__(self, driver, link, user_info, name):
         self.driver = driver
@@ -219,6 +218,11 @@ class UserCreation:
         self.oid_location = ""
         self.user_name = ""
 
+        # used for duplicate keys, increments by 1 if the new user is unique.
+        # NOTE: the first duplicate user starts at 2.
+        self.user_name_unique_id = 1
+
+    # MAIN FUNCTION
     def create_user(self):
         self.driver.get(self.link)
 
@@ -230,17 +234,21 @@ class UserCreation:
 
         # email keys
         f_name, l_name = self.name_keys()
-        self.user_name = f"{f_name}.{l_name}@teksystemsgs.com"
+        # if unique id is equal to 1, then it is a unique, non-duplicate username.
+        if self.user_name_unique_id >= 1:
+            self.user_name = f"{f_name}.{l_name}@teksystemsgs.com"
+        else:
+            self.user_name = f'{f_name}.{l_name}{str(self.user_name_unique_id)}@teksystemsgs.com'
         self.send_email_keys()
 
-        # NOTE: these comapnies deviates from the standard user creation.
+        # NOTE: these companies does not adhere to the standard user creation process.
         aerotek_list = ["Aerotek", "Aston Carter", "Actalent"]
         self.send_org_keys(aerotek_list)
 
         errors = self.save_user()
         if errors == False:
             self.search_user_list(20)
-            self.fill_user()
+            self.fill_user(False)
             print("   User created. Please double check the information before continuing.")
         else:
             print("   User updated. Please double check the information before continuing.")
@@ -300,6 +308,7 @@ class UserCreation:
         self.format_office_id()
         self.driver.find_element(By.ID, "sys_user.u_office_id").send_keys(self.oid)
     
+    # MAIN FUNCTION - saves the user and checks for errors during the process.
     def save_user(self):
         # TODO: check for errors during user creation: incorrect PID, incorrect company, duplicate username, incorrect email
         save_btn_xpath = '//button[@id="sysverb_insert_and_stay"]'
@@ -327,8 +336,10 @@ class UserCreation:
 
             return True
         elif 'The following mandatory fields' in errors[0]:
-            print("\n   WARNING: An error has occurred with creating a new user.")
-
+            # TODO: open the company list and check if the company name exists inside the list.
+            # NOTE: if the company does not exist, then create a new company with the same name.
+            print("\n   WARNING: An error has occurred with creating a new user. WIP")
+            
             return True
         else:
             print("\n   WARNING: An error has occurred with creating a new user.")
@@ -338,7 +349,6 @@ class UserCreation:
 
             return True
     
-    # TODO: make an alert switcher
     def search_user_list(self, time_to_wait):
         user_link = 'https://tek.service-now.com/nav_to.do?uri=%2Fsys_user_list.do%3Fsysparm_clear_stack%3Dtrue%26sysparm_userpref_module%3D62354a4fc0a801941509bc63f8c4b979'
 
@@ -356,18 +366,26 @@ class UserCreation:
         user_search.send_keys(self.user_name)
         user_search.send_keys(Keys.ENTER)
 
-    def fill_user(self):
-        # TODO: create a separate fill user functionality IF the duplicate key error message is present.
+    def fill_user(self, duplicate_error):
+        # duplicate is a bool, which indicates to update an existing user rather work on a new user.
         print("\n   User search completed.")
         # to access each cell: /td[X]
         # start on the 6th cell and end on the 11th
         # 6th = CID, 7th = office number (OID), 9th = office location, 10th = division
         user_cell_xpath = '//tbody[@class="list2_body"]'
         user_cells = []
-        for i in range(6, 11):
-            # 8th cell contains office ID, which is filled from the user creation.
-            if i != 8:
+        if duplicate_error is False:
+            for i in range(6, 11):
+                # 8th cell contains office ID, which is filled from the user creation process.
+                if i != 8:
+                    user_cell = f'{user_cell_xpath}//td[{i}]'
+        
+                user_cells.append(user_cell)
+        else:
+            for i in range(5, 11):
+                # update all values of an existing user, only executes if a Unique Key error is found.
                 user_cell = f'{user_cell_xpath}//td[{i}]'
+        
                 user_cells.append(user_cell)
         
         elements = []
@@ -380,6 +398,10 @@ class UserCreation:
 
         # ORDER: customer ID, office number, office location, division
         keys_to_send = [self.cid, self.oid, self.oid_location, self.div]
+
+        if duplicate_error:
+            keys_to_send.insert(0, self.pid)
+            keys_to_send.insert(3, self.oid)
 
         try:
             count = 0
@@ -426,7 +448,7 @@ class UserCreation:
 
         return errors
 
-    # compare values in existing user to the info in the ticket.
+    # DUPLICATE KEY ERROR, checks info from existing user and the user inside the RITM ticket.
     def error_duplicate_key(self):
         self.search_user_list(5)
         
@@ -438,7 +460,7 @@ class UserCreation:
         email_xpath = self.driver.find_element(By.XPATH, f'//tbody[@class="list2_body"]//td[15]')
         print('\n   Comparing information of the existing user and the ticket.')
 
-        # if employee ID or all digits but the last one matches.
+        # if employee ID or all digits but the last matches.
         if eid_xpath.text == self.eid or eid_xpath.text[0:-1] == self.eid:
             eid_check = True
             print(f'\n   Employee ID matched! {self.eid}')
@@ -453,17 +475,17 @@ class UserCreation:
         if eid_check is True or email_check is True:
             print('\n   Existing user matches the RITM user, updating information.')
             time.sleep(3)
-            self.fill_user()
+            self.fill_user(True)
         else:
             # if none matches, then this user is a new user.
             # adjust the user_name by adding in first.name{1 + i}@... depending on how many exists.
             # NOTE: there is a 99% chance that a third same-name user won't be needed, but keep it in mind!
             # TODO: create new user but with first.name{1 + i}@...
             print('\n   Existing user is unique, creating new user with updated username.')
+            self.user_name_unique_id += 1
+            self.create_user()
             time.sleep(3)
-            pass
 
-    # extract only the number ID of the oid instance
     def format_office_id(self):
         full_oid = self.oid
         full_oid = full_oid.split("-", 1)
@@ -471,7 +493,6 @@ class UserCreation:
         self.oid = full_oid[0].strip()
         self.oid_location = full_oid[-1].strip()
     
-    # modify the name into the correct format
     def name_keys(self):
         name = self.name
         name = " ".join(name)
