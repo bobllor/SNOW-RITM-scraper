@@ -1,17 +1,16 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from placeholder import Login, ScrapeRITM, UserCreation
+from selenium.common.exceptions import NoSuchFrameException, NoSuchElementException
 import menu, os, time, re
 from acc import get_accs
 
 if __name__ == '__main__':
-    # keep browser open until program terminates
     options = Options()
     options.add_experimental_option("detach", True)
 
     driver = webdriver.Chrome(options=options)
 
-    # main login logic to access SNOW
     user, pw = get_accs()
     login_link = "https://tek.service-now.com/navpage.do"
     login = Login(driver, login_link, user, pw)
@@ -19,7 +18,6 @@ if __name__ == '__main__':
     login.login_sn()
     os.system('cls')
 
-    # TODO: input to choose either user creation or label generation (WIP)
     # search for an RITM ticket and scrape the info on the ticket
     # xpath for global search in order to enter the RITM number
     new_user_link = 'https://tek.service-now.com/nav_to.do?uri=%2Fsys_user.do%3Fsys_id%3D-1%26sys_is_list%3Dtrue%26sys_target%3Dsys_user%26sysparm_checked_items%3D%26sysparm_fixed_query%3D%26sysparm_group_sort%3D%26sysparm_list_css%3D%26sysparm_query%3DGOTO123TEXTQUERY321%3DDavid%2BKvachev%26sysparm_referring_url%3Dsys_user_list.do%3Fsysparm_query%3DGOTO123TEXTQUERY321%253DDavid%2BKvachev@99@sysparm_first_row%3D1%26sysparm_target%3D%26sysparm_view%3D'
@@ -67,21 +65,25 @@ if __name__ == '__main__':
         if choice == 'b':
             scraper.search_ritm()
 
-            print("\n   Obtaining information for user creation...")
-            name = scraper.scrape_name()
-            user_info = scraper.scrape_user_info()
-            # remove this later, used for debugging purposes
-            print("   DEBUG:", user_info, name)
-            time.sleep(2)
-            print('   Complete.')
-            
-            new_user = UserCreation(driver, new_user_link, user_info, name)
-            print("\n   Starting user creation process.")
-            time.sleep(3)
-            new_user.create_user()
+            try:
+                print("\n   Obtaining information for user creation...")
+                name = scraper.scrape_name()
+                user_info = scraper.scrape_user_info()
+                # remove this later, used for debugging purposes
+                print("   DEBUG:", user_info, name)
+                time.sleep(2)
+                print('   Complete.')
+                    
+                new_user = UserCreation(driver, new_user_link, user_info, name)
+                print("\n   Starting user creation process.")
+                time.sleep(3)
+                new_user.create_user()
+            except NoSuchElementException:
+                print('   CRITICAL ERROR: No element was found!')
+            except NoSuchFrameException:
+                print('   CRITICAL ERROR: No frame was found!')
 
-            input("\n   Press 'enter' to continue.")
-        
+        input("\n   Press 'enter' to continue.")
         os.system('cls')
 
     # while loop exit

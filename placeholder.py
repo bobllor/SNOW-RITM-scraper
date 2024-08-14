@@ -1,7 +1,7 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, NoSuchFrameException
 import time, re
 
 class Login:
@@ -29,7 +29,7 @@ class Login:
         print("\n   Login complete.")
         time.sleep(8)
 
-class ScrapeRITM():
+class ScrapeRITM:
     def __init__(self, driver, ritm):
         self.driver = driver
         self.ritm = ritm
@@ -81,24 +81,29 @@ class ScrapeRITM():
         return req, name, address
     
     def scrape_name(self):
-        self.driver.switch_to.frame("gsft_main")
+        try:
+            self.driver.switch_to.frame("gsft_main")
 
-        # xpath of first and last name child containers
-        fn_xpath = '//tr[1]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
-        ln_xpath = '//tr[2]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
-        name_xpaths = [f"{self.consultant_info_xpath}{fn_xpath}", 
-                            f"{self.consultant_info_xpath}{ln_xpath}"]
-        
-        names = []
-        for xpath in name_xpaths:
-            element_xpath = self.driver.find_element(By.XPATH, xpath)
-            part = element_xpath.get_attribute("value")
-            names.append(part)
-        
-        for index, name in enumerate(names):
-            names[index] = name.strip().title()
-        
-        return names
+            # xpath of first and last name child containers
+            fn_xpath = '//tr[1]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
+            ln_xpath = '//tr[2]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
+            name_xpaths = [f"{self.consultant_info_xpath}{fn_xpath}", 
+                                f"{self.consultant_info_xpath}{ln_xpath}"]
+            
+            names = []
+            for xpath in name_xpaths:
+                element_xpath = self.driver.find_element(By.XPATH, xpath)
+                part = element_xpath.get_attribute("value")
+                names.append(part)
+            
+            for index, name in enumerate(names):
+                names[index] = name.strip().title()
+            
+            return names
+        except NoSuchElementException:
+            raise NoSuchElementException
+        except NoSuchFrameException:
+            raise NoSuchFrameException
     
     def scrape_address(self):
         # xpath of container that holds all address info
@@ -163,16 +168,18 @@ class ScrapeRITM():
         # consultant info xpaths
         email_xpath = '//tr[3]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
         eid_xpath = '//tr[4]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
-        div_xpath = '//option[contains(@selected, "SELECTED")]'
+        # TODO: fix this, something is going on with the script unable to scrape the division number.
+        # TODO: annoying piece of shit xpath!!!
+        div_xpath = '//table/tbody/tr[2]//option[@selected="SELECTED"]'
+        print(f'DEBUG (scrape_user_info()): {self.driver.find_element(By.XPATH, div_xpath)})')
+
+        input("   Press 'enter' to continue.")
         
         # consultant container, contains employee ID and email address
         consultant_xpaths = [email_xpath, eid_xpath, div_xpath]
         for xpath in consultant_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, f"{self.consultant_info_xpath}{xpath}")
-            if xpath == div_xpath:
-                part = element_xpath.text
-            else:
-                part = element_xpath.get_attribute("value")
+            part = element_xpath.get_attribute("value")
 
             user_info.append(part)
 
@@ -213,7 +220,7 @@ class UserCreation:
         self.link = link
         self.name = name
 
-        # company info, instances are initialized from a list
+        # company info, instances are initialized from a list from ScrapeRITM
         # in order: email, employee ID, division #, company ID, company name, office ID, project ID, and organization
         self.email = user_info[0]
         self.eid = user_info[1]
@@ -255,9 +262,9 @@ class UserCreation:
         if errors == False:
             self.search_user_list(20)
             self.fill_user(False)
-            print("\n   User created. Please double check the information before continuing.")
+            print("\n   User created. Please check the information before continuing.")
         else:
-            print("\n   User updated. Please double check the information before continuing.")
+            print("\n   Error handled, user updated accordingly. Please check the information before continuing.")
     
     def save_user(self):
         # TODO: check for errors during user creation: incorrect PID, incorrect company, incorrect email
@@ -288,8 +295,26 @@ class UserCreation:
         elif 'The following mandatory fields' in errors[0]:
             # TODO: open the company list and check if the company name exists inside the list.
             # NOTE: if the company does not exist, then create a new company with the same name.
-            print("\n   WARNING: An error has occurred with creating a new user. WIP")
+            print("\n   WARNING: The company name does not exist.")
+            print('   Checking the company lookup list for the company name.')
+            time.sleep(2)
+            self.error_invalid_company()
             
+            return True
+        elif 'Invalid email address' in errors[0]:
+            print('\n   WARNING: An invalid email address was detected!')
+            print('   Replacing the email with the username.')
+            time.sleep(3)
+            self.error_invalid_email()
+            time.sleep(3)
+            self.search_user_list(20)
+            self.fill_user(False)
+
+            return True
+        elif 'Invalid update' in errors[0]:
+            print('\n   WARNING: The project ID is invalid!')
+            print('   WIP')
+
             return True
         else:
             print("\n   WARNING: An error has occurred with creating a new user.")
@@ -382,14 +407,25 @@ class UserCreation:
         time.sleep(5)
 
     def user_error_msg_check(self):
+        '''
+        following mandatory fields: bad company name, either it does not exist or SNOW is being bad.
+        unique key violation: a user already exists with the newly created username.
+        invalid email: bad email, not sure why this happens.
+        invalid update: bad project ID, either it does not exist or SNOW is being bad.
+        '''
         error_list = ['The following mandatory fields are not filled in: Company',
-                      'Unique Key violation detected by database']
+                      'Unique Key violation detected by database',
+                      'Invalid email address',
+                      'Invalid update']
         errors = []
         
-        # if an error message exists, return the object type.
-        # error_hide returns a list of objects if found
+        # search for if the error exists
         for error in error_list:
-            element_xpath = self.driver.find_elements(By.XPATH, f'//span[contains(text(), "{error}")]')
+            if error != error_list[2]:
+                element_xpath = self.driver.find_elements(By.XPATH, f'//span[contains(text(), "{error}")]')
+            else:
+                element_xpath = self.driver.find_elements(By.XPATH, f'//div[contains(text(), "{error}")]')
+
             if element_xpath:
                 error_msg = element_xpath[0].text
                 errors.append(error_msg)
@@ -406,7 +442,9 @@ class UserCreation:
         email_check = False
 
         eid_xpath = self.driver.find_element(By.XPATH, f'//tbody[@class="list2_body"]//td[11]')
-        email_xpath = self.driver.find_element(By.XPATH, f'//tbody[@class="list2_body"]//td[15]')
+        email_xpath = self.driver.find_element(By.XPATH, f'//tbody[@class="list2_body"]//td[14]')
+        personal_email_xpath = self.driver.find_element(By.XPATH, f'//tbody[@class="list2_body"]//td[15]')
+        email_texts = [email_xpath.text, personal_email_xpath.text]
         print('\n   Comparing information of the existing user and the ticket.\n')
 
         # if employee ID is not TBD, and employee ID or all digits but the last matches.
@@ -415,27 +453,75 @@ class UserCreation:
                 eid_check = True
                 print(f'   Employee ID matched! {self.eid}')
                 time.sleep(2)
+        
+        for email in email_texts:
+            # user_name == email takes into account of if the consultant
+            # puts down their username instead of a personal email address.
+            if self.email == email or self.user_name == email:
+                email_check = True
+                print(f'   Email address matched! {self.email}')
+                time.sleep(2)
+                break
 
-        if email_xpath.text == self.email or self.user_name == self.email:
-            email_check = True
-            print(f'   Email address matched! {self.email}')
-            time.sleep(2)
-
-        # fill in the new info on the existing user based on if employee ID and email matches.
+        # replace existing info on the user if employee ID and email matches.
         if eid_check is True or email_check is True:
             print('   Existing user is the same from the RITM ticket, updating information.')
             time.sleep(3)
             self.fill_user(True)
         else:
             # if none matches, then this user is a new user.
-            # adjust the user_name by adding in first.name{1 + i}@... depending on how many exists.
+            # adjust the username by adding in first.name{1 + i}@... depending on how many exists.
             # NOTE: there is a 99% chance that a third same-name user won't be needed, but keep it in mind!
-            # TODO: create new user but with first.name{1 + i}@...
             print('   Existing user is a different user, creating new user with updated username.')
             self.user_name_unique_id += 1
             self.create_user()
             time.sleep(3)
 
+    # INVALID COMPANY/COMPANY DOESN'T EXIST, select the company from the list or create a new one.
+    def error_invalid_company(self):
+        default_window = self.driver.current_window_handle
+
+        time.sleep(2)
+        self.driver.find_element(By.XPATH, '//button[@name="lookup.sys_user.company"]').click()
+        time.sleep(5)
+
+        for window_handle in self.driver.window_handles:
+            if window_handle != default_window:
+                self.driver.switch_to.window(window_handle)
+                time.sleep(3)
+                break
+        
+        company_table = '//tbody[@class="list2_body"]'
+        company_name = '//a[@tabindex="0"]'
+
+        company_list = self.driver.find_elements(By.XPATH, f'{company_table}{company_name}[contains(text(), "{self.company}")]')
+
+        if company_list:
+            for count, company_name in enumerate(company_list):
+                if self.company == company_list[count].text:
+                    company_list[count].click()
+                    break
+            self.driver.close()
+            self.driver.switch_to.window(default_window)
+        else:
+            # TODO: create a new company name and click on the company.
+            pass
+    
+    # INVALID EMAIL ERROR, replaces email address with username instead.
+    def error_invalid_email(self):
+        # change the user's email to the username instead.
+        self.email = self.user_name
+
+        email_field = self.driver.find_element(By.ID, "sys_user.email")
+        email_field.send_keys(Keys.CONTROL + 'a')
+        time.sleep(2)
+        email_field.send_keys(Keys.DELETE)
+        time.sleep(2)
+        email_field.send_keys(self.email)
+        time.sleep(2)
+
+        self.save_user()
+    
     # fills in consultant first name, last name, and their employee ID.
     def send_consultant_keys(self):
         self.driver.find_element(By.ID, "sys_user.first_name").send_keys(self.name[0])
@@ -522,3 +608,6 @@ class UserCreation:
                 zeroes = 4 - counter
                 prefix = "0" * zeroes
                 self.pid = prefix + pid
+
+class AdminRights:
+    pass
