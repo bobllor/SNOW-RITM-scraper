@@ -64,7 +64,7 @@ if __name__ == '__main__':
         
         if choice == 'b':
             scraper.search_ritm()
-
+            # TODO: implement logging for exceptions
             try:
                 print("\n   Obtaining information for user creation...")
                 name = scraper.scrape_name()
@@ -78,11 +78,14 @@ if __name__ == '__main__':
                 print("\n   Starting user creation process.")
                 time.sleep(3)
                 new_user.create_user()
-            except NoSuchElementException:
-                print('   CRITICAL ERROR: No element was found!')
-            except NoSuchFrameException:
-                print('   CRITICAL ERROR: No frame was found!')
+            except NoSuchElementException as nsee:
+                print('\n   CRITICAL ERROR: An element cannot be found associated with the RITM ticket.')
+                print(f'   {nsee}')
+            except NoSuchFrameException as nsfe:
+                print('\n   CRITICAL ERROR: No frame was found.')
+                print(f'   {nsfe}')
 
+        print ('   Returning back to menu.')
         input("\n   Press 'enter' to continue.")
         os.system('cls')
 

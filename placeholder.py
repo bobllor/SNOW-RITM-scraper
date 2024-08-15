@@ -168,12 +168,7 @@ class ScrapeRITM:
         # consultant info xpaths
         email_xpath = '//tr[3]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
         eid_xpath = '//tr[4]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
-        # TODO: fix this, something is going on with the script unable to scrape the division number.
-        # TODO: annoying piece of shit xpath!!!
-        div_xpath = '//table/tbody/tr[2]//option[@selected="SELECTED"]'
-        print(f'DEBUG (scrape_user_info()): {self.driver.find_element(By.XPATH, div_xpath)})')
-
-        input("   Press 'enter' to continue.")
+        div_xpath = '//table[@class="container_table"]/tbody/tr[2]//option[@selected="SELECTED"]'
         
         # consultant container, contains employee ID and email address
         consultant_xpaths = [email_xpath, eid_xpath, div_xpath]
@@ -213,7 +208,7 @@ class ScrapeRITM:
         # returns a list: email, employee ID, division, customer ID, company, office ID, project ID, and organization
         return user_info
 
-# NOTE: still requires manual input in certain aspects of the program.
+# NOTE: still requires manual input if something goes wrong.
 class UserCreation:
     def __init__(self, driver, link, user_info, name):
         self.driver = driver
@@ -238,6 +233,10 @@ class UserCreation:
         # used for duplicate keys, increments by 1 if the new user is unique.
         # NOTE: the first duplicate user starts at 2.
         self.user_name_unique_id = 1
+        # used to indicate if a user already exists, and not to initiate
+        # the fill_user() process in the UserCreation class. 
+        # by default it is False- meaning that it should attempt to create a new user every time.
+        self.existing_user = False
 
     def create_user(self):
         self.driver.get(self.link)
@@ -250,6 +249,7 @@ class UserCreation:
 
         f_name, l_name = self.name_keys()
         # if unique id is equal to 1, then it is a unique, non-duplicate username.
+        # the line of code that is used to increment this count is found in error_duplicate_key().
         if self.user_name_unique_id >= 1:
             self.user_name = f"{f_name}.{l_name}@teksystemsgs.com"
         else:
@@ -259,15 +259,19 @@ class UserCreation:
         self.send_org_keys()
 
         errors = self.save_user()
-        if errors == False:
-            self.search_user_list(20)
-            self.fill_user(False)
+        if errors is False and self.existing_user is False:
+            self.search_user_list(15)
+            self.fill_user()
             print("\n   User created. Please check the information before continuing.")
         else:
+            # check save_users(), if errors is True and existing_user is False then execute
+            # the new user creation. to be honest, i could just make new user creation into a function.
+            # TODO: make it into a function. maybe.
             print("\n   Error handled, user updated accordingly. Please check the information before continuing.")
     
     def save_user(self):
-        # TODO: check for errors during user creation: incorrect PID, incorrect company, incorrect email
+        self.driver.switch_to.default_content()
+        self.driver.switch_to.frame('gsft_main')
         save_btn_xpath = '//button[@id="sysverb_insert_and_stay"]'
         time.sleep(5)
 
@@ -286,41 +290,37 @@ class UserCreation:
         if errors == []:
             return False
         elif 'Unique Key violation' in errors[0]:
+            # either a new user will be created or the existing user is updated, both of which
+            # are determined inside the function call below. uses create_user() and fill_user().
             print('\n   WARNING: User already exists in the database!')
             print('   Checking the existing user\'s information.')
             time.sleep(3)
             self.error_duplicate_key()
-
-            return True
         elif 'The following mandatory fields' in errors[0]:
-            # TODO: open the company list and check if the company name exists inside the list.
-            # NOTE: if the company does not exist, then create a new company with the same name.
             print("\n   WARNING: The company name does not exist.")
             print('   Checking the company lookup list for the company name.')
             time.sleep(2)
             self.error_invalid_company()
-            
-            return True
         elif 'Invalid email address' in errors[0]:
             print('\n   WARNING: An invalid email address was detected!')
             print('   Replacing the email with the username.')
             time.sleep(3)
             self.error_invalid_email()
             time.sleep(3)
-            self.search_user_list(20)
-            self.fill_user(False)
-
-            return True
         elif 'Invalid update' in errors[0]:
             print('\n   WARNING: The project ID is invalid!')
-            print('   WIP')
-
-            return True
+            self.error_project_id()
         else:
             print("\n   WARNING: An error has occurred with creating a new user.")
             print("   The automatation will stop here, manual input to finish the user is required.")
             print("   A search of the user will occur in the Users List.")
             input("   Press 'enter' to continue.")
+
+        if errors:
+            if self.existing_user is False:
+                self.save_user()
+                self.search_user_list(15)
+                self.fill_user()
 
             return True
 
@@ -345,12 +345,12 @@ class UserCreation:
         time.sleep(1)
         print("   User search completed.")
 
-    def fill_user(self, duplicate_error):
+    def fill_user(self):
         keys_to_send = [self.cid, self.oid, self.oid, self.oid_location, self.div]
         user_cells = []
         user_cell_xpath = '//tbody[@class="list2_body"]'
-        # duplicate is a bool, which indicates to update an existing user rather work on a new user.
-        if duplicate_error:
+        
+        if self.existing_user:
             user_cells.append(f'{user_cell_xpath}//td[4]')
             keys_to_send.insert(0, self.pid)
 
@@ -369,39 +369,38 @@ class UserCreation:
         time.sleep(5)
         print("\n   Inserting in consultant values...")
 
-        try:
-            count = 0
-            for key in keys_to_send:
-                if key == self.pid:
-                    # this code works around the issue with the href link located in the project ID cell.
-                    ActionChains(self.driver).click(elements[count]).perform()
-                    time.sleep(1.5)
-                    ActionChains(self.driver).send_keys(Keys.ARROW_RIGHT).perform()
-                    time.sleep(1.5)
-                    ActionChains(self.driver).send_keys(Keys.ENTER).perform()
-                else:
-                    ActionChains(self.driver).double_click(elements[count]).perform()
-
-                time.sleep(2.5)
-                
-                if duplicate_error:
-                    cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="sys_display.LIST_EDIT_sys_user.u_project_id"]')
+        count = 0
+        for key in keys_to_send:
+            if key == self.pid:
+                # this code works around the issue with the href link located in the project ID cell.
+                # long story short, if it works it ain't stupid!
+                ActionChains(self.driver).click(elements[count]).perform()
+                time.sleep(1.5)
+                ActionChains(self.driver).send_keys(Keys.ARROW_RIGHT).perform()
+                time.sleep(1.5)
+                ActionChains(self.driver).send_keys(Keys.ENTER).perform()
+                time.sleep(1.5)
+                cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="sys_display.LIST_EDIT_sys_user.u_project_id"]')
+            else:
+                ActionChains(self.driver).double_click(elements[count]).perform()
+                time.sleep(1.5)
                 cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="cell_edit_value"]')
 
-                # if an entry exists, remove it (NOTE: ONLY USED FOR UPDATING USERS).
-                if cell_edit_value.text:
-                    cell_edit_value.send_keys(Keys.CONTROL + "a")
-                    time.sleep(2)
-                    cell_edit_value.send_keys(Keys.DELETE)
+            time.sleep(1.5)
 
-                cell_edit_value.send_keys(key)
-                time.sleep(2.5)
-                cell_edit_value.send_keys(Keys.ENTER)
-                time.sleep(3)
-                
-                count += 1
-        except:
-            raise NoSuchElementException
+            # normally opening the cell already highlights the entire text,
+            # but just to be safe this will remove it also.
+            if cell_edit_value.text:
+                cell_edit_value.send_keys(Keys.CONTROL + "a")
+                time.sleep(1.5)
+                cell_edit_value.send_keys(Keys.DELETE)
+
+            cell_edit_value.send_keys(key)
+            time.sleep(1.5)
+            cell_edit_value.send_keys(Keys.ENTER)
+            time.sleep(1.5)
+            
+            count += 1
         
         print("   Task completed.")
         time.sleep(5)
@@ -433,7 +432,8 @@ class UserCreation:
 
         return errors
 
-    # DUPLICATE KEY ERROR, checks info from existing user and the user inside the RITM ticket.
+    # DUPLICATE KEY ERROR, compares the existing user with the info inside the RITM ticket.
+    # NOTE: don't bother refactoring this, i can tell this is a lot of unnecessary work - Tri | 8/15/2024.
     def error_duplicate_key(self):
         self.search_user_list(5)
         
@@ -447,29 +447,28 @@ class UserCreation:
         email_texts = [email_xpath.text, personal_email_xpath.text]
         print('\n   Comparing information of the existing user and the ticket.\n')
 
-        # if employee ID is not TBD, and employee ID or all digits but the last matches.
         if self.eid != 'TBD':
             if eid_xpath.text == self.eid or eid_xpath.text[0:-1] == self.eid:
                 eid_check = True
                 print(f'   Employee ID matched! {self.eid}')
                 time.sleep(2)
         
+        # takes into account of if the CSA is stupid and puts down
+        # the consultant's username instead of the personal email.
         for email in email_texts:
-            # user_name == email takes into account of if the consultant
-            # puts down their username instead of a personal email address.
             if self.email == email or self.user_name == email:
                 email_check = True
                 print(f'   Email address matched! {self.email}')
                 time.sleep(2)
                 break
 
-        # replace existing info on the user if employee ID and email matches.
         if eid_check is True or email_check is True:
             print('   Existing user is the same from the RITM ticket, updating information.')
             time.sleep(3)
-            self.fill_user(True)
+            # triggers that the existing user needs to be modified
+            self.existing_user = True
+            self.fill_user()
         else:
-            # if none matches, then this user is a new user.
             # adjust the username by adding in first.name{1 + i}@... depending on how many exists.
             # NOTE: there is a 99% chance that a third same-name user won't be needed, but keep it in mind!
             print('   Existing user is a different user, creating new user with updated username.')
@@ -494,19 +493,81 @@ class UserCreation:
         company_table = '//tbody[@class="list2_body"]'
         company_name = '//a[@tabindex="0"]'
 
+        self.driver.switch_to.default_content()
+
         company_list = self.driver.find_elements(By.XPATH, f'{company_table}{company_name}[contains(text(), "{self.company}")]')
 
+        # look for the exact match of company name and element value.
         if company_list:
-            for count, company_name in enumerate(company_list):
-                if self.company == company_list[count].text:
-                    company_list[count].click()
+            for company_name in company_list:
+                if self.company == company_name.text:
+                    found = True
+                    company_name.click()
+                    time.sleep(1.5)
+                    self.driver.switch_to.window(default_window)
                     break
-            self.driver.close()
-            self.driver.switch_to.window(default_window)
-        else:
-            # TODO: create a new company name and click on the company.
-            pass
+                else:
+                    found = False
     
+        if company_list == [] or found is False:
+            print('\n   Company is not found in the list. Creating a new company name.')
+            time.sleep(1.5)
+
+            new_company_button = self.driver.find_element(By.XPATH, '//button[@type="submit"]')
+            new_company_button.click()
+            time.sleep(3)
+
+            name_field = self.driver.find_element(By.XPATH, '//input[@name="core_company.name"]')
+            name_field.send_keys(self.company)
+            time.sleep(1.5)
+            save_button = self.driver.find_element(By.XPATH, '//button[@value="sysverb_insert_and_stay"]')
+            save_button.click()
+            time.sleep(1.5)
+
+            self.driver.close()
+            time.sleep(1.5)
+            self.driver.switch_to.window(default_window)
+
+            # call function again to select the company name.
+            self.error_invalid_company()
+    
+    # INVALID PROJECT ID, select the project ID from the list or create a new one.
+    def error_project_id(self):
+        default_window = self.driver.current_window_handle
+
+        time.sleep(2)
+        self.driver.find_element(By.XPATH, '//button[@name="lookup.sys_user.u_project_id"]').click()
+        time.sleep(5)
+
+        for window_handle in self.driver.window_handles:
+            if window_handle != default_window:
+                self.driver.switch_to.window(window_handle)
+                time.sleep(3)
+                break
+        
+        project_table = '//tbody[@class="list2_body"]'
+        project_id = '//a[@role="button"]'
+
+        project_list = self.driver.find_elements(By.XPATH, f'{project_table}{project_id}[contains(text(), "{self.pid}")]')
+
+        if project_list:
+            for project in project_list:
+                if self.pid == project.text:
+                    found = True
+                    project.click()
+                    time.sleep(1.5)
+                    self.driver.switch_to.window(default_window)
+                    break
+                else:
+                    found = False
+        
+        if project_list == [] or found is False:
+            print('   WIP')
+            new_button = self.driver.find_element(By.XPATH, '//button[@value="sysverb_new"]')
+            # TODO: fill in project ID, primary POC (CSA), division, allocation (GS/STAFFING).
+            # TODO: fill in the date, this requires extra steps (open calender, select today, hit enter/save)
+            time.sleep(1.5)
+
     # INVALID EMAIL ERROR, replaces email address with username instead.
     def error_invalid_email(self):
         # change the user's email to the username instead.
@@ -609,5 +670,6 @@ class UserCreation:
                 prefix = "0" * zeroes
                 self.pid = prefix + pid
 
+# used for companies that have blanket admin rights.
 class AdminRights:
     pass
