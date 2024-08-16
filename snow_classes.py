@@ -1,8 +1,6 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import NoSuchElementException, NoSuchFrameException
-from selenium.webdriver.support.select import Select
 import time, re
 
 class Login:
