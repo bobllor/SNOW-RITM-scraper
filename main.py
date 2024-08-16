@@ -1,9 +1,19 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from placeholder import Login, ScrapeRITM, UserCreation
+from snow_classes import Login, ScrapeRITM, UserCreation
+from task_completion import TaskComplete
 from selenium.common.exceptions import NoSuchFrameException, NoSuchElementException
 import menu, os, time, re
 from acc import get_accs
+
+# TODO: fix error with Actalent organizations- by extension this should also be an issue with other Aerotek companies.
+# Message: no such element: Unable to locate element:
+# {"method":"xpath","selector":"//tr[@id="element.container_84f76a0ee1fc8a00c2ab91d15440c50e"]/
+# /tr[24]//input[@class="cat_item_option sc-content-pad form-control"]"}
+
+# TODO: fix error with creating new company in the user creation.
+# Message: no such element: Unable to locate element:
+# {"method":"xpath","selector":"//button[@name="lookup.sys_user.company"]"}
 
 if __name__ == '__main__':
     options = Options()
@@ -25,7 +35,7 @@ if __name__ == '__main__':
     while True:
         choice = menu.main_menu()
 
-        if choice == 'c':
+        if choice == 'd':
             break
         
         os.system('cls')
@@ -46,26 +56,24 @@ if __name__ == '__main__':
                 print("\n   Valid inputs: RITM1234567 | 1234567")
                 ritm = input("\n   Enter an RITM number: ")
 
-        # TODO: make a try-except catch for bad RITM input
-        print("\n   Searching for RITM...")
-        scraper = ScrapeRITM(driver, ritm)
-
-        # TODO: tie in with my fedex label maker
-        # FedEx requirements: RITM, REQ, address, and name.
-        if choice == 'a':
-            print("\n   Work in progress")
-            time.sleep(4)
-
-            #print("Obtaining information for label creation...")
-        
-            '''req, name, address = scraper.scrape_ritm()
-            # remove this later, used for debugging purposes
-            print(f"{ritm} {req} {name} {address}")'''
-        
-        if choice == 'b':
+        try:
+            print("\n   Searching for RITM...")
+            scraper = ScrapeRITM(driver, ritm)
             scraper.search_ritm()
-            # TODO: implement logging for exceptions
-            try:
+
+            # TODO: tie in with my fedex label maker
+            # FedEx requirements: RITM, REQ, address, and name.
+            if choice == 'a':
+                print("\n   Work in progress")
+                time.sleep(4)
+
+                #print("Obtaining information for label creation...")
+            
+                '''req, name, address = scraper.scrape_ritm()
+                # remove this later, used for debugging purposes
+                print(f"{ritm} {req} {name} {address}")'''
+            
+            if choice == 'b':
                 print("\n   Obtaining information for user creation...")
                 name = scraper.scrape_name()
                 user_info = scraper.scrape_user_info()
@@ -78,16 +86,22 @@ if __name__ == '__main__':
                 print("\n   Starting user creation process.")
                 time.sleep(3)
                 new_user.create_user()
-            except NoSuchElementException as nsee:
-                print('\n   CRITICAL ERROR: An element cannot be found associated with the RITM ticket.')
-                print(f'   {nsee}')
-            except NoSuchFrameException as nsfe:
-                print('\n   CRITICAL ERROR: No frame was found.')
-                print(f'   {nsfe}')
+            
+            if choice == 'c':
+                input("   Testing out task completion press 'enter' to continue.")
 
-        print ('   Returning back to menu.')
-        input("\n   Press 'enter' to continue.")
+                task = TaskComplete(driver)
+                task.complete_task()
+        
+        # TODO: implement logging for exceptions
+        except NoSuchElementException as nsee:
+            print('\n   CRITICAL ERROR: An element cannot be found associated with the RITM ticket.')
+            print(f'   {nsee}')
+        except NoSuchFrameException as nsfe:
+            print('\n   CRITICAL ERROR: No frame was found.')
+            print(f'   {nsfe}')
+            
+        input("\n   Press 'enter' to return back to menu.")
         os.system('cls')
 
-    # while loop exit
     driver.quit()

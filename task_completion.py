@@ -1,0 +1,54 @@
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.support.select import Select
+import time
+
+class TaskComplete:
+    def __init__(self, driver):
+        self.driver = driver
+
+    def complete_task(self):
+        self.driver.switch_to.frame("gsft_main")
+
+        # NOTE: status cells, no matter if it's the first or the following two/three cells, will always
+        # be tr[1]. HOWEVER, this is assuming that the filter is default view- new appearing tasks go from bottom
+        # to top. keep it in mind if this ever breaks.
+        catalog_task_container = '//div[@id="sc_req_item.sc_task.request_item_list"]'
+        status_cell = '//tbody[@class="list2_body"]/tr[1]//td[4]'
+
+        # TODO: differentiate between return and regular RITMs- they are three/four tasks respectively.
+        count = 0
+        while count < 3:
+            # click on the status cell to open the selection menu.
+            clickable = self.driver.find_element(By.XPATH, f'{catalog_task_container}{status_cell}')
+            ActionChains(self.driver).double_click(clickable).perform()
+            print('DEBUG: double clicked cell')
+            time.sleep(2)
+
+            # click on the option to mark it as Closed Complete.
+            status_list = Select(self.driver.find_element(By.XPATH, '//select[@id="cell_edit_value"]'))
+            for option in status_list.options:
+                if option.text == 'Closed Complete':
+                    option.click()
+                    time.sleep(1)
+                    self.driver.find_element(By.XPATH, '//a[@id="cell_edit_ok"]').click()
+                    break
+            time.sleep(3)
+            
+            # refresh the task bar to show the next status cell, it doesn't update automatically.
+            catalog_task_bar = '//div[@class="navbar-header"]'
+            task_bar = self.driver.find_element(By.XPATH, f'{catalog_task_container}{catalog_task_bar}')
+            ActionChains(self.driver).context_click(task_bar).perform()
+            time.sleep(2)
+            refresh_xpath = '//div[@id="context_list_titlesc_req_item.sc_task.request_item"]//div[@item_id="216ac28a0a0a0bb200af43eb879c30ae"]'
+            refresh = self.driver.find_element(By.XPATH, refresh_xpath)
+            time.sleep(2)
+            refresh.click()
+            time.sleep(5.5)
+
+            # remove later, this is used to ensure i don't accidentally break something
+            input('Press enter to continue (DEBUG)')
+
+            count += 1
+
