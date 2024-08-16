@@ -233,8 +233,9 @@ class UserCreation:
         # used for duplicate keys, increments by 1 if the new user is unique.
         # NOTE: the first duplicate user starts at 2.
         self.user_name_unique_id = 1
+
         # used to indicate if a user already exists, and not to initiate
-        # the fill_user() process in the UserCreation class. 
+        # the fill_user() process in the UserCreation class.
         # by default it is False- meaning that it should attempt to create a new user every time.
         self.existing_user = False
 
@@ -508,8 +509,10 @@ class UserCreation:
                     break
                 else:
                     found = False
-    
+
         if company_list == [] or found is False:
+            # apparently this crashes the program, i am unsure why since there are
+            # rarely any tickets that requires a new company to be made.
             print('\n   Company is not found in the list. Creating a new company name.')
             time.sleep(1.5)
 
@@ -527,6 +530,7 @@ class UserCreation:
             self.driver.close()
             time.sleep(1.5)
             self.driver.switch_to.window(default_window)
+            self.driver.switch_to.default_content()
 
             # call function again to select the company name.
             self.error_invalid_company()
@@ -672,4 +676,5 @@ class UserCreation:
 
 # used for companies that have blanket admin rights.
 class AdminRights:
+    # microsoft, apple, pet smart, american airlines, altice, church of christ, disney, 
     pass
