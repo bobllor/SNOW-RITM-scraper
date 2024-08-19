@@ -4,16 +4,8 @@ from snow_classes import Login, ScrapeRITM, UserCreation
 from task_completion import TaskComplete
 from selenium.common.exceptions import NoSuchFrameException, NoSuchElementException
 import menu, os, time, re
+from log import logger
 from acc import get_accs
-
-# TODO: fix error with Actalent organizations- by extension this should also be an issue with other Aerotek companies.
-# Message: no such element: Unable to locate element:
-# {"method":"xpath","selector":"//tr[@id="element.container_84f76a0ee1fc8a00c2ab91d15440c50e"]/
-# /tr[24]//input[@class="cat_item_option sc-content-pad form-control"]"}
-
-# TODO: fix error with creating new company in the user creation.
-# Message: no such element: Unable to locate element:
-# {"method":"xpath","selector":"//button[@name="lookup.sys_user.company"]"}
 
 if __name__ == '__main__':
     options = Options()
@@ -96,10 +88,10 @@ if __name__ == '__main__':
         # TODO: implement logging for exceptions
         except NoSuchElementException as nsee:
             print('\n   CRITICAL ERROR: An element cannot be found associated with the RITM ticket.')
-            print(f'   {nsee}')
+            logger(nsee, 'ERROR')
         except NoSuchFrameException as nsfe:
             print('\n   CRITICAL ERROR: No frame was found.')
-            print(f'   {nsfe}')
+            logger(nsee, 'ERROR')
             
         input("\n   Press 'enter' to return back to menu.")
         os.system('cls')

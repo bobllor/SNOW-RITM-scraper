@@ -1,6 +1,7 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
+from selenium.common.exceptions import NoSuchElementException
 import time, re
 
 class Login:
@@ -92,6 +93,13 @@ class ScrapeRITM:
         for xpath in name_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, xpath)
             part = element_xpath.get_attribute("value")
+
+            # checks if the name field has something else other than
+            # the name itself, such as C/O XX XX. should rarely be true.
+            if len(part.split()) > 3:
+                split_part = part.split()
+                part = split_part[0]
+
             names.append(part)
         
         for index, name in enumerate(names):
@@ -139,8 +147,8 @@ class ScrapeRITM:
         org_ele_xpath = self.driver.find_element(By.XPATH, f"{self.org_info_xpath}{org_xpath}")
         org = org_ele_xpath.get_attribute("value")
 
-        # allegis child orgs that creates additional fields inside the ticket
-        # changing the xpaths of a typical RITM ticket.
+        # allegis child orgs that uses a completley different form than
+        # a standard company request.
         allegis_list = ["Aerotek", "Aston Carter", "Actalent"]
 
         if org in allegis_list:
@@ -152,7 +160,7 @@ class ScrapeRITM:
 
         # CHECKS IF CID CONTAINS ANYTHING OTHER THAN A NUMBER.
         # this is needed because if customer ID is not a number, then additional forms will appear
-        # which pushes down the customer IDs and other values.
+        # which changes the position of where the CID field is.
         customer_id_values = ["New Customer", "Not Listed"]
         if self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value") in customer_id_values:
             cid_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
@@ -162,15 +170,23 @@ class ScrapeRITM:
         # consultant info xpaths
         email_xpath = '//tr[3]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
         eid_xpath = '//tr[4]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
-        div_xpath = '//table[@class="container_table"]/tbody/tr[2]//option[@selected="SELECTED"]'
-        
+
         # consultant container, contains employee ID and email address
-        consultant_xpaths = [email_xpath, eid_xpath, div_xpath]
+        consultant_xpaths = [email_xpath, eid_xpath]
         for xpath in consultant_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, f"{self.consultant_info_xpath}{xpath}")
             part = element_xpath.get_attribute("value")
 
             user_info.append(part)
+        
+        div_xpath = '//table[@class="container_table"]/tbody/tr[2]//option[@selected="SELECTED"]'
+        div_value = self.driver.find_element(By.XPATH, f'{self.consultant_info_xpath}{div_xpath}').get_attribute("value")
+        # depending on the selected division #, the xpath can either be tr[1] or tr[2].
+        # if the value is empty, then try the other xpath instead.
+        if div_value == '':
+            div_xpath = '//table[@class="container_table"]/tbody/tr[1]//option[@selected="SELECTED"]'
+            div_value = self.driver.find_element(By.XPATH, f'{self.consultant_info_xpath}{div_xpath}').get_attribute("value")
+        user_info.append(div_value)
 
         # company container, contains company information (customer ID, company name, office ID)
         company_xpaths = [cid_xpath, company_xpath, oid_xpath]
@@ -181,9 +197,15 @@ class ScrapeRITM:
             company_xpaths.append(pid_xpath)
         
         for xpath in company_xpaths:
-            element_xpath = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{xpath}")
+            try:
+                element_xpath = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{xpath}")
+            except NoSuchElementException:
+                # in case of an error with actalent oid, use an alternative xpath.
+                if xpath == company_xpaths[2]:
+                    company_xpaths[2] = '//tr[24]//input[@class="questionsetreference form-control element_reference_input"]'
+                    element_xpath = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{xpath}")
+            
             part = element_xpath.get_attribute("value")
-
             user_info.append(part.strip())
 
         # changes the project ID if org is not GS
@@ -275,9 +297,6 @@ class UserCreation:
         time.sleep(3)
 
         errors = self.user_error_msg_check()
-
-        print(f"\n   DEBUG (Class UserCreation: errors @ save_user(self)): {errors}")
-        print("   TO DO: do stuff with error checking. yeah!")
 
         time.sleep(3)
 
@@ -476,6 +495,7 @@ class UserCreation:
         default_window = self.driver.current_window_handle
 
         time.sleep(2)
+        self.driver.switch_to.frame("gsft_main")
         self.driver.find_element(By.XPATH, '//button[@name="lookup.sys_user.company"]').click()
         time.sleep(5)
 
