@@ -70,5 +70,4 @@ class TaskComplete:
 
             self.driver.switch_to.defaultcontent()
         else:
-            # raise an error, WIP.
-            pass
+            print('\n   ERROR: Something went wrong with the task completion.')

@@ -554,6 +554,7 @@ class UserCreation:
         default_window = self.driver.current_window_handle
 
         time.sleep(2)
+        self.driver.switch_to.frame("gsft_main")
         self.driver.find_element(By.XPATH, '//button[@name="lookup.sys_user.u_project_id"]').click()
         time.sleep(5)
 
@@ -562,6 +563,8 @@ class UserCreation:
                 self.driver.switch_to.window(window_handle)
                 time.sleep(3)
                 break
+        
+        self.driver.switch_to.default_content()
         
         project_table = '//tbody[@class="list2_body"]'
         project_id = '//a[@role="button"]'

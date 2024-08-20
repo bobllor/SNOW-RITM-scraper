@@ -7,7 +7,7 @@ def main_menu():
 
     choice = input("\n   Enter an option: ").lower()
 
-    while choice not in ['a', 'b', 'c']:
+    while choice not in ['a', 'b', 'c', 'd']:
         print("\n   Option not detected.")
         choice = input("   Enter an option: ").lower()
     
