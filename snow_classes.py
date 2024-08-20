@@ -1,7 +1,7 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, NoSuchFrameException
 import time, re
 
 class Login:
@@ -64,22 +64,23 @@ class ScrapeRITM:
     
     # NOTE: this function alone can be used to generate a label with my FedEx label program.
     def scrape_ritm(self):
-        self.driver.switch_to.frame("gsft_main")
+        #self.driver.switch_to.frame("gsft_main")
 
-        # returns the REQ number
         req = self.scrape_req()
-        time.sleep(2.5)
-
-        # returns the full name of the consultant
-        name = self.scrape_name()
         time.sleep(2.5)
 
         # returns the address of the consultant
         address = self.scrape_address()
         time.sleep(2.5)
 
-        return req, name, address
+        return req, address
     
+    def scrape_need_by_date(self) -> str:
+        input_xpath = '//input[@id="sc_req_item.u_need_by_"]'
+        date = self.driver.find_element(By.XPATH, input_xpath).get_attribute("value")
+
+        return date
+
     def scrape_name(self):
         self.driver.switch_to.frame("gsft_main")
 
@@ -108,19 +109,22 @@ class ScrapeRITM:
         return names
     
     def scrape_address(self):
-        # xpath of container that holds all address info
+        # column xpath which divides the address container.
         column_xpath1 = '//div[@class="section-content catalog-section-content"]/div[1]'
         column_xpath2 = '//div[@class="section-content catalog-section-content"]/div[2]'
 
-        # xpath of street 1, street 2, and postal
         street_one_xpath = f'{column_xpath1}//tr[1]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
         street_two_xpath = f'{column_xpath1}//tr[2]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
         postal_xpath = f'{column_xpath2}//tr[1]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
+        city_xpath = f'{column_xpath1}//tr[3]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[2]'
+        state_xpath = f'{column_xpath2}//tr[4]//option[@selected="SELECTED"]'
 
-        # order: ADDRESS 1, ADDRESS 2, POSTAL
+        # ORDER: ADDRESS 1, ADDRESS 2, POSTAL, CITY, STATE.
         address_xpaths = [f"{self.address_info_xpath}{street_one_xpath}",
                           f"{self.address_info_xpath}{street_two_xpath}",
-                          f"{self.address_info_xpath}{postal_xpath}"]
+                          f"{self.address_info_xpath}{postal_xpath}",
+                          f"{self.address_info_xpath}{city_xpath}",
+                          f"{self.address_info_xpath}{state_xpath}"]
 
         address = []
 
@@ -128,8 +132,11 @@ class ScrapeRITM:
             element_xpath = self.driver.find_element(By.XPATH, xpath)
             part = element_xpath.get_attribute("value").strip()
 
-            if part != None or part != " " or part != "":
-                address.append(part)
+            address.append(part)
+        
+        for add_part in address:
+            if add_part == '' or add_part == ' ':
+                address.remove(add_part)
     
         return " ".join(address)
     
@@ -233,7 +240,7 @@ class UserCreation:
 
         # company info, instances are initialized from a list from ScrapeRITM
         # in order: email, employee ID, division #, company ID, company name, office ID, project ID, and organization
-        self.email = user_info[0]
+        self.email = user_info[0].strip()
         self.eid = user_info[1]
         self.div = user_info[2]
         self.cid = user_info[3]
@@ -301,7 +308,7 @@ class UserCreation:
         time.sleep(3)
 
         # returns T/F if there was an error found during the user creation process.
-        if errors == []:
+        if errors == [] and self.existing_user is False:
             return False
         elif 'Unique Key violation' in errors[0]:
             # either a new user will be created or the existing user is updated, both of which
@@ -384,39 +391,56 @@ class UserCreation:
         print("\n   Inserting in consultant values...")
 
         count = 0
-        for key in keys_to_send:
-            if key == self.pid:
-                # this code works around the issue with the href link located in the project ID cell.
-                # long story short, if it works it ain't stupid!
-                ActionChains(self.driver).click(elements[count]).perform()
-                time.sleep(1.5)
-                ActionChains(self.driver).send_keys(Keys.ARROW_RIGHT).perform()
-                time.sleep(1.5)
-                ActionChains(self.driver).send_keys(Keys.ENTER).perform()
-                time.sleep(1.5)
-                cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="sys_display.LIST_EDIT_sys_user.u_project_id"]')
+        # in case of a failure, repeat the process until it is complete.
+        repeat_attempts = 0
+        while count < len(keys_to_send) or repeat_attempts != 3:
+            if repeat_attempts < 3 and count < len(keys_to_send):
+                # try except block is used to keep trying in case an error occurs 
+                # during the attempt to fill a status cell in
+                try:
+                    print(f'   Filling in {keys_to_send[count]}...')
+                    if keys_to_send[count] == self.pid:
+                        # this code works around the issue with the href link located in the project ID cell.
+                        # long story short, if it works it ain't stupid!
+                        ActionChains(self.driver).click(elements[count]).perform()
+                        time.sleep(1.5)
+                        ActionChains(self.driver).send_keys(Keys.ARROW_RIGHT).perform()
+                        time.sleep(1.5)
+                        ActionChains(self.driver).send_keys(Keys.ENTER).perform()
+                        time.sleep(1.5)
+                        cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="sys_display.LIST_EDIT_sys_user.u_project_id"]')
+                    else:
+                        ActionChains(self.driver).double_click(elements[count]).perform()
+                        time.sleep(1.5)
+                        cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="cell_edit_value"]')
+
+                    time.sleep(1.5)
+
+                    # normally opening the cell already highlights the entire text,
+                    # but just to be safe this will remove it also.
+                    if cell_edit_value.text:
+                        cell_edit_value.send_keys(Keys.CONTROL + "a")
+                        time.sleep(1.5)
+                        cell_edit_value.send_keys(Keys.DELETE)
+
+                    cell_edit_value.send_keys(keys_to_send[count])
+                    time.sleep(1.5)
+                    cell_edit_value.send_keys(Keys.ENTER)
+                    time.sleep(1.5)
+                    
+                    count += 1
+                    # if successful, reset repeat_attempts to 0.
+                    repeat_attempts = 0
+                    print(f'Count: {count} Repeat: {repeat_attempts}')
+                    time.sleep(3)
+                except NoSuchElementException:
+                    repeat_attempts += 1
+                    print(f'   Failed inserting {keys_to_send[count]}. Repeating {3 - repeat_attempts}')
+                    time.sleep(2)
             else:
-                ActionChains(self.driver).double_click(elements[count]).perform()
-                time.sleep(1.5)
-                cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="cell_edit_value"]')
-
-            time.sleep(1.5)
-
-            # normally opening the cell already highlights the entire text,
-            # but just to be safe this will remove it also.
-            if cell_edit_value.text:
-                cell_edit_value.send_keys(Keys.CONTROL + "a")
-                time.sleep(1.5)
-                cell_edit_value.send_keys(Keys.DELETE)
-
-            cell_edit_value.send_keys(key)
-            time.sleep(1.5)
-            cell_edit_value.send_keys(Keys.ENTER)
-            time.sleep(1.5)
-            
-            count += 1
+                raise NoSuchElementException('   ERROR: Element attempts have exceeded maximum count!')
         
-        print("   Task completed.")
+        print("   User filling completed.")
         time.sleep(5)
 
     def user_error_msg_check(self):
@@ -495,6 +519,7 @@ class UserCreation:
         default_window = self.driver.current_window_handle
 
         time.sleep(2)
+        self.driver.switch_to.default_content()
         self.driver.switch_to.frame("gsft_main")
         self.driver.find_element(By.XPATH, '//button[@name="lookup.sys_user.company"]').click()
         time.sleep(5)
@@ -554,6 +579,7 @@ class UserCreation:
         default_window = self.driver.current_window_handle
 
         time.sleep(2)
+        self.driver.switch_to.default_content()
         self.driver.switch_to.frame("gsft_main")
         self.driver.find_element(By.XPATH, '//button[@name="lookup.sys_user.u_project_id"]').click()
         time.sleep(5)
