@@ -422,6 +422,7 @@ class UserCreation:
                         cell_edit_value.send_keys(Keys.CONTROL + "a")
                         time.sleep(1.5)
                         cell_edit_value.send_keys(Keys.DELETE)
+                        time.sleep(1.5)
 
                     cell_edit_value.send_keys(keys_to_send[count])
                     time.sleep(1.5)
@@ -475,6 +476,7 @@ class UserCreation:
     # DUPLICATE KEY ERROR, compares the existing user with the info inside the RITM ticket.
     # NOTE: don't bother refactoring this, i can tell this is a lot of unnecessary work - Tri | 8/15/2024.
     def error_duplicate_key(self):
+        # TODO: check if all cells match, then don't do anything.
         self.search_user_list(5)
         
         # bool to check if the items matches
