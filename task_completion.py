@@ -68,6 +68,6 @@ class TaskComplete:
             self.driver.find_element(By.XPATH, save_xpath).click()
             time.sleep(3)
 
-            self.driver.switch_to.defaultcontent()
+            self.driver.switch_to.default_content()
         else:
             print('\n   ERROR: Something went wrong with the task completion.')

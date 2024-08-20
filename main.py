@@ -68,7 +68,9 @@ if __name__ == '__main__':
             if choice == 'b':
                 print("\n   Obtaining information for user creation...")
                 name = scraper.scrape_name()
+                req, address = scraper.scrape_ritm()
                 user_info = scraper.scrape_user_info()
+                need_by = scraper.scrape_need_by_date()
                 # remove this later, used for debugging purposes
                 print("   DEBUG:", user_info, name)
                 time.sleep(2)
@@ -78,20 +80,25 @@ if __name__ == '__main__':
                 print("\n   Starting user creation process.")
                 time.sleep(3)
                 new_user.create_user()
+                print('\n   Label information:')
+                print(f'\t   Ticket info: {" ".join(name)} {ritm} {req}')
+                print(f'\t   Address: {address}')
+                print(f'\t   Need by: {need_by}')
             
             if choice == 'c':
-                input("   Testing out task completion press 'enter' to continue.")
+                print("   Starting the task closing process...")
 
                 task = TaskComplete(driver)
                 task.complete_task()
+                print("   Task closed.")
         
         # TODO: implement logging for exceptions
         except NoSuchElementException as nsee:
             print('\n   CRITICAL ERROR: An element cannot be found associated with the RITM ticket.')
-            logger(nsee, 'ERROR')
+            print(f'   {nsee}')
         except NoSuchFrameException as nsfe:
             print('\n   CRITICAL ERROR: No frame was found.')
-            logger(nsee, 'ERROR')
+            print(f'   {nsfe}')
             
         input("\n   Press 'enter' to return back to menu.")
         os.system('cls')

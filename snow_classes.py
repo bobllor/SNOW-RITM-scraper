@@ -393,8 +393,8 @@ class UserCreation:
         count = 0
         # in case of a failure, repeat the process until it is complete.
         repeat_attempts = 0
-        while count < len(keys_to_send) or repeat_attempts != 3:
-            if repeat_attempts < 3 and count < len(keys_to_send):
+        while count < len(keys_to_send) and repeat_attempts != 3:
+            if repeat_attempts < 3:
                 # try except block is used to keep trying in case an error occurs 
                 # during the attempt to fill a status cell in
                 try:
@@ -431,11 +431,13 @@ class UserCreation:
                     count += 1
                     # if successful, reset repeat_attempts to 0.
                     repeat_attempts = 0
-                    print(f'Count: {count} Repeat: {repeat_attempts}')
                     time.sleep(3)
                 except NoSuchElementException:
                     repeat_attempts += 1
-                    print(f'   Failed inserting {keys_to_send[count]}. Repeating {3 - repeat_attempts}')
+                    text_times = 'times'
+                    if 3 - repeat_attempts < 1:
+                        text_times = 'time'
+                    print(f'   Failed inserting {keys_to_send[count]}. Repeating {3 - repeat_attempts} {text_times}.')
                     time.sleep(2)
             else:
                 raise NoSuchElementException('   ERROR: Element attempts have exceeded maximum count!')
