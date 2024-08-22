@@ -3,7 +3,7 @@ from selenium.webdriver.chrome.options import Options
 from snow_classes import Login, ScrapeRITM, UserCreation
 from task_completion import TaskComplete
 from selenium.common.exceptions import NoSuchFrameException, NoSuchElementException
-import menu, os, time, re
+import menu, os, time, re, traceback
 from log import logger
 from acc import get_accs
 
@@ -71,10 +71,11 @@ if __name__ == '__main__':
                 req, address = scraper.scrape_ritm()
                 user_info = scraper.scrape_user_info()
                 need_by = scraper.scrape_need_by_date()
+                requested_item, add_items = scraper.scrape_hardware()
                 # remove this later, used for debugging purposes
                 print("   DEBUG:", user_info, name)
                 time.sleep(2)
-                print('   Complete.')
+                print('   Obtaining information complete.')
                     
                 new_user = UserCreation(driver, new_user_link, user_info, name)
                 print("\n   Starting user creation process.")
@@ -83,6 +84,7 @@ if __name__ == '__main__':
                 print('\n   Label information:')
                 print(f'\t   Ticket info: {" ".join(name)} {ritm} {req}')
                 print(f'\t   Address: {address}')
+                print(f'\t   Hardware: {requested_item} {" ".join(add_items)}')
                 print(f'\t   Need by: {need_by}')
             
             if choice == 'c':
@@ -93,12 +95,12 @@ if __name__ == '__main__':
                 print("   Task closed.")
         
         # TODO: implement logging for exceptions
-        except NoSuchElementException as nsee:
+        except NoSuchElementException:
             print('\n   CRITICAL ERROR: An element cannot be found associated with the RITM ticket.')
-            print(f'   {nsee}')
-        except NoSuchFrameException as nsfe:
+            print(f'   {traceback.format_exc()}')
+        except NoSuchFrameException:
             print('\n   CRITICAL ERROR: No frame was found.')
-            print(f'   {nsfe}')
+            print(f'   {traceback.format_exc()}')
             
         input("\n   Press 'enter' to return back to menu.")
         os.system('cls')

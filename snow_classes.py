@@ -54,14 +54,14 @@ class ScrapeRITM:
         global_search.send_keys(self.ritm)
         global_search.send_keys(Keys.ENTER)
 
-        time.sleep(10)
+        time.sleep(15)
 
         print("   RITM search complete.")
         # reset search field to prepare it for future queries
         global_search.click()
         global_search.send_keys(Keys.CONTROL + "a")
         global_search.send_keys(Keys.DELETE)
-    
+
     # NOTE: this function alone can be used to generate a label with my FedEx label program.
     def scrape_ritm(self):
         #self.driver.switch_to.frame("gsft_main")
@@ -146,35 +146,61 @@ class ScrapeRITM:
 
         return req
     
+    # hardware options that the requestor checked, in addition to the main item.
+    def scrape_hardware(self):
+        hardware_container = '//span[@id="question_container_d7af38e4e17c4a00c2ab91d15440c571"]'
+        checked_xpath = f'{hardware_container}/div[2]/div[1]//input[@checked="checked"]'
+        checked_obj_list = self.driver.find_elements(By.XPATH, checked_xpath)
+
+        # the main item that is being requested/wanted.
+        requested_item_xpath = '//input[@id="sys_display.sc_req_item.cat_item"]'
+        requested_item = self.driver.find_element(By.XPATH, requested_item_xpath).get_attribute("value")
+
+        time.sleep(2)
+
+        items = []
+        if checked_obj_list:
+            text_xpath = f'{checked_xpath}/following-sibling::label'
+            text_obj_list = self.driver.find_elements(By.XPATH, text_xpath)
+
+            time.sleep(2)
+
+            if text_obj_list:
+                for obj in text_obj_list:
+                    items.append(obj.text)
+
+        if items:
+            for index, item in enumerate(items):
+                if 'Add' in item:
+                    items[index] = item.replace('Add', '').lstrip()
+        
+        return requested_item, items
+    
     def scrape_user_info(self):
+        # list for these pieces of shit, they change the xpaths of normal builds.
+        allegis_list = ["Aerotek", "Aston Carter", "Actalent"]
+
         user_info = []
 
-        # organization container, contains global services, staffing, or aerotek orgs
+        # organization container, contains global services, staffing, or allegis orgs
         org_xpath = '//option[contains(@selected, "SELECTED")]'
         org_ele_xpath = self.driver.find_element(By.XPATH, f"{self.org_info_xpath}{org_xpath}")
         org = org_ele_xpath.get_attribute("value")
 
-        # allegis child orgs that uses a completley different form than
-        # a standard company request.
-        allegis_list = ["Aerotek", "Aston Carter", "Actalent"]
-
-        if org in allegis_list:
-            oid_xpath = '//tr[24]//input[@class="cat_item_option sc-content-pad form-control"]'
-        else:
+        try:
             oid_xpath = '//tr[24]//input[@class="questionsetreference form-control element_reference_input"]'
+        except NoSuchElementException:
+            # in case of an exception- this shouldn't happen often except for fucking allegis.
+            oid_xpath = '//tr[24]//input[@class="cat_item_option sc-content-pad form-control"]'
 
         cid_xpath = '//tr[19]//input[@class="questionsetreference form-control element_reference_input"]'
-
-        # CHECKS IF CID CONTAINS ANYTHING OTHER THAN A NUMBER.
-        # this is needed because if customer ID is not a number, then additional forms will appear
-        # which changes the position of where the CID field is.
+        # if CID is not a number, then a new field will appear below the company name.
+        # this pushes the CID from [19] to [22]
         customer_id_values = ["New Customer", "Not Listed"]
         if self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value") in customer_id_values:
             cid_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
-            
         company_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
 
-        # consultant info xpaths
         email_xpath = '//tr[3]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
         eid_xpath = '//tr[4]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
 
@@ -197,30 +223,34 @@ class ScrapeRITM:
 
         # company container, contains company information (customer ID, company name, office ID)
         company_xpaths = [cid_xpath, company_xpath, oid_xpath]
-        
+    
         # append project ID if xpath if org is GS, other orgs removes the project ID field.
         if org == 'GS':
             pid_xpath = '//tr[7]//input[@class="cat_item_option sc-content-pad form-control"]'
             company_xpaths.append(pid_xpath)
         
         for xpath in company_xpaths:
-            try:
-                element_xpath = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{xpath}")
-            except NoSuchElementException:
-                # in case of an error with actalent oid, use an alternative xpath.
-                if xpath == company_xpaths[2]:
-                    company_xpaths[2] = '//tr[24]//input[@class="questionsetreference form-control element_reference_input"]'
-                    element_xpath = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{xpath}")
-            
+            element_xpath = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{xpath}")
             part = element_xpath.get_attribute("value")
             user_info.append(part.strip())
+        
+        # Not Listed creates two new fields for the office ID and location/name. 
+        if 'Not Listed' in user_info[5]:
+            oid_xpath = '//tr[25]//input[@class="cat_item_option sc-content-pad form-control"]'
+            olocation_xpath = '//tr[26]//input[@class="cat_item_option sc-content-pad form-control"]'
+
+            oid = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{oid_xpath}').get_attribute('value')
+            olocation = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{olocation_xpath}').get_attribute('value')
+
+            user_info[5] = f'{oid} - {olocation}'
 
         # changes the project ID if org is not GS
         if org in allegis_list:
             if org == "Actalent":
                 org = "ACTALENT"
-            # modifies division and project ID
+            # modifies division, company, PID
             user_info[2] = org
+            user_info[4] = org
             user_info.append(org)
         if org == 'Staffing':
             user_info.append('TEKSTAFFING')
@@ -228,7 +258,8 @@ class ScrapeRITM:
         # append organzation last to the list
         user_info.append(org)
         
-        # returns a list: email, employee ID, division, customer ID, company, office ID, project ID, and organization
+        # NOTE: bad employee IDs gets converted to TBD in class UserCreation.
+        # returns: email, employee ID, division, customer ID, company, office ID, project ID, and organization
         return user_info
 
 # NOTE: still requires manual input if something goes wrong.
@@ -272,9 +303,8 @@ class UserCreation:
         self.send_consultant_keys()
 
         f_name, l_name = self.name_keys()
-        # if unique id is equal to 1, then it is a unique, non-duplicate username.
-        # the line of code that is used to increment this count is found in error_duplicate_key().
-        if self.user_name_unique_id >= 1:
+        
+        if self.user_name_unique_id == 1:
             self.user_name = f"{f_name}.{l_name}@teksystemsgs.com"
         else:
             self.user_name = f'{f_name}.{l_name}{str(self.user_name_unique_id)}@teksystemsgs.com'
@@ -366,90 +396,123 @@ class UserCreation:
         time.sleep(1)
         print("   User search completed.")
 
+    # used for both filling and checking the user information.
     def fill_user(self):
         keys_to_send = [self.cid, self.oid, self.oid, self.oid_location, self.div]
-        user_cells = []
+        user_cells_obj = []
         user_cell_xpath = '//tbody[@class="list2_body"]'
-        
-        if self.existing_user:
-            user_cells.append(f'{user_cell_xpath}//td[4]')
-            keys_to_send.insert(0, self.pid)
 
-        # start on the 6th cell and end on the 10th
-        # 6th = CID, 7th = office number (OID), 9th = office location, 10th = division
+        # cell positions: 5* 6 7 8 9 10
+        # PID*, CID, OID, OID, office location, division
+        # *only used if duplicate user is true.
         for i in range(6, 11):
             user_cell = f'{user_cell_xpath}//td[{i}]'
            
-            user_cells.append(user_cell)
+            user_cells_obj.append(user_cell)
+        
+        if self.existing_user:
+            # PID cell, this will get changed later- for now it is used
+            # to check the value of the cell.
+            user_cells_obj.insert(0, f'{user_cell_xpath}//td[5]')
+            keys_to_send.insert(0, self.pid)
+        else:
+            # remove oid/3rd element as it is filled during the user creation.
+            keys_to_send.pop(2)
+            user_cells_obj.pop(2)
     
-        elements = []
-        for path in user_cells:
+        elements_obj = []
+        for path in user_cells_obj:
             element_xpath = self.driver.find_element(By.XPATH, path)
-            elements.append(element_xpath)
+            elements_obj.append(element_xpath)
+
+        # checks if the cell values are the same as the ticket info.
+        # if True, then remove the web object from the list to not fill.
+        if self.existing_user:
+            index_remover = []
+            cell_names = ['Project ID', 'Customer ID', 'Office Number',
+                          'Office ID', 'Office Location', 'Division']
+            for index, web_obj in enumerate(elements_obj):
+                if web_obj.text == keys_to_send[index]:
+                    print(f'   {cell_names[index]} {web_obj.text} matches.')
+                    index_remover.append(index)
+                else:
+                    print(f'   {cell_names[index]} {web_obj.text} does not match.')
+            
+            for index in sorted(index_remover, reverse=True):
+                del elements_obj[index]
+                del keys_to_send[index]
+            
+            if keys_to_send:
+                # changes the PID cell (//td[5]) to the name cell (//td[4]).
+                # this is done to work around the href link found in //td[5].
+                # check while loop below, TL;DR: Right Arrow -> Enter (bypasses the link).
+                if keys_to_send[0] == self.pid:
+                    elements_obj[0] = self.driver.find_element(By.XPATH, f'{user_cell_xpath}//td[4]')
 
         time.sleep(5)
         print("\n   Inserting in consultant values...")
 
         count = 0
-        # in case of a failure, repeat the process until it is complete.
         repeat_attempts = 0
         while count < len(keys_to_send) and repeat_attempts != 3:
-            if repeat_attempts < 3:
-                # try except block is used to keep trying in case an error occurs 
-                # during the attempt to fill a status cell in
-                try:
-                    print(f'   Filling in {keys_to_send[count]}...')
-                    if keys_to_send[count] == self.pid:
-                        # this code works around the issue with the href link located in the project ID cell.
-                        # long story short, if it works it ain't stupid!
-                        ActionChains(self.driver).click(elements[count]).perform()
-                        time.sleep(1.5)
-                        ActionChains(self.driver).send_keys(Keys.ARROW_RIGHT).perform()
-                        time.sleep(1.5)
-                        ActionChains(self.driver).send_keys(Keys.ENTER).perform()
-                        time.sleep(1.5)
-                        cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="sys_display.LIST_EDIT_sys_user.u_project_id"]')
-                    else:
-                        ActionChains(self.driver).double_click(elements[count]).perform()
-                        time.sleep(1.5)
-                        cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="cell_edit_value"]')
+            # try block is used to keep trying in case an error occurs 
+            # during the attempt to fill a status cell in, max 3 repeats.
+            try:
+                print(f'   Inserting {keys_to_send[count]}...')
+                if keys_to_send[count] == self.pid:
+                    # workaround the issue with the href link located in the PID cell.
+                    # if it works it ain't stupid!
+                    ActionChains(self.driver).click(elements_obj[count]).perform()
+                    time.sleep(1)
+                    ActionChains(self.driver).send_keys(Keys.ARROW_RIGHT).perform()
+                    time.sleep(1)
+                    ActionChains(self.driver).send_keys(Keys.ENTER).perform()
+                    time.sleep(1)
+                    cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="sys_display.LIST_EDIT_sys_user.u_project_id"]')
+                else:
+                    ActionChains(self.driver).double_click(elements_obj[count]).perform()
+                    time.sleep(1)
+                    cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="cell_edit_value"]')
 
-                    time.sleep(1.5)
+                time.sleep(1)
 
-                    # normally opening the cell already highlights the entire text,
-                    # but just to be safe this will remove it also.
-                    if cell_edit_value.text:
-                        cell_edit_value.send_keys(Keys.CONTROL + "a")
-                        time.sleep(1.5)
-                        cell_edit_value.send_keys(Keys.DELETE)
-                        time.sleep(1.5)
+                # normally opening the cell already highlights the entire text,
+                # but just to be safe this will remove it also.
+                if cell_edit_value.text:
+                    cell_edit_value.send_keys(Keys.CONTROL + "a")
+                    time.sleep(1)
+                    cell_edit_value.send_keys(Keys.DELETE)
+                    time.sleep(1)
 
-                    cell_edit_value.send_keys(keys_to_send[count])
-                    time.sleep(1.5)
-                    cell_edit_value.send_keys(Keys.ENTER)
-                    time.sleep(1.5)
-                    
-                    count += 1
-                    # if successful, reset repeat_attempts to 0.
-                    repeat_attempts = 0
-                    time.sleep(3)
-                except NoSuchElementException:
-                    repeat_attempts += 1
+                cell_edit_value.send_keys(keys_to_send[count])
+                time.sleep(1)
+                cell_edit_value.send_keys(Keys.ENTER)
+                time.sleep(1)
+                
+                count += 1
+                # if successful, reset repeat_attempts to 0.
+                repeat_attempts = 0
+                time.sleep(2)
+            except NoSuchElementException:
+                repeat_attempts += 1
+                if 3 - repeat_attempts <= 1:
+                    text_times = 'time'
+                else:
                     text_times = 'times'
-                    if 3 - repeat_attempts < 1:
-                        text_times = 'time'
-                    print(f'   Failed inserting {keys_to_send[count]}. Repeating {3 - repeat_attempts} {text_times}.')
-                    time.sleep(2)
-            else:
-                raise NoSuchElementException('   ERROR: Element attempts have exceeded maximum count!')
+                print(f'   Failed inserting {keys_to_send[count]}. Repeating {3 - repeat_attempts} {text_times}.')
+                time.sleep(2)
         
-        print("   User filling completed.")
+        if repeat_attempts != 3:
+            print("   User filling completed.")
+        else:
+            # TODO: use an actual exception here, maybe a custom one?
+            raise NoSuchElementException
         time.sleep(5)
 
     def user_error_msg_check(self):
         '''
         following mandatory fields: bad company name, either it does not exist or SNOW is being bad.
-        unique key violation: a user already exists with the newly created username.
+        unique key violation: a user already exists with the username.
         invalid email: bad email, not sure why this happens.
         invalid update: bad project ID, either it does not exist or SNOW is being bad.
         '''
@@ -498,14 +561,14 @@ class UserCreation:
         # takes into account of if the CSA is stupid and puts down
         # the consultant's username instead of the personal email.
         for email in email_texts:
-            if self.email == email or self.user_name == email:
+            if self.email.lower() == email.lower() or self.user_name.lower() == email.lower():
                 email_check = True
                 print(f'   Email address matched! {self.email}')
                 time.sleep(2)
                 break
 
         if eid_check is True or email_check is True:
-            print('   Existing user is the same from the RITM ticket, updating information.')
+            print('   Existing user is the same from the RITM ticket, updating relevant information.')
             time.sleep(3)
             # triggers that the existing user needs to be modified
             self.existing_user = True
@@ -726,4 +789,10 @@ class AdminRights:
     # american airlines, microsoft, t-mobile, LSD saints/church of christ
     # church mutual (staffing ONLY), do it best, frontier, altice
     # apple, petsmart
-    pass
+    def __init__(self, company):
+        self.company = company
+
+        self.blanket_dict = {
+            'Microsoft': ['MSFT'],
+            'American Airlines': ['AA'],
+        }
