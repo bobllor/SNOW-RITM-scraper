@@ -3,9 +3,31 @@ from selenium.webdriver.chrome.options import Options
 from snow_classes import Login, ScrapeRITM, UserCreation
 from task_completion import TaskComplete
 from selenium.common.exceptions import NoSuchFrameException, NoSuchElementException
+from selenium.common.exceptions import ElementClickInterceptedException
 import menu, os, time, re, traceback
+import debug
 from log import logger
 from acc import get_accs
+
+def create_user(scraper: ScrapeRITM):
+    print("\n   Obtaining information for user creation...")
+    name = scraper.scrape_name()
+    req, address = scraper.scrape_ritm()
+    user_info = scraper.scrape_user_info()
+    need_by = scraper.scrape_need_by_date()
+    requested_item, add_items = scraper.scrape_hardware()
+    # remove this later, used for debugging purposes
+    debug.debug_ritm_info(user_info, name)
+
+    new_user = UserCreation(driver, new_user_link, user_info, name)
+    print("\n   Starting user creation process.")
+    time.sleep(3)
+    new_user.create_user()
+    print('\n   Label information:')
+    print(f'\t   Ticket info: {" ".join(name)} {ritm} {req}')
+    print(f'\t   Address: {address}')
+    print(f'\t   Hardware: {requested_item} {" ".join(add_items)}')
+    print(f'\t   Need by: {need_by}')
 
 if __name__ == '__main__':
     options = Options()
@@ -66,26 +88,7 @@ if __name__ == '__main__':
                 print(f"{ritm} {req} {name} {address}")'''
             
             if choice == 'b':
-                print("\n   Obtaining information for user creation...")
-                name = scraper.scrape_name()
-                req, address = scraper.scrape_ritm()
-                user_info = scraper.scrape_user_info()
-                need_by = scraper.scrape_need_by_date()
-                requested_item, add_items = scraper.scrape_hardware()
-                # remove this later, used for debugging purposes
-                print("   DEBUG:", user_info, name)
-                time.sleep(2)
-                print('   Obtaining information complete.')
-                    
-                new_user = UserCreation(driver, new_user_link, user_info, name)
-                print("\n   Starting user creation process.")
-                time.sleep(3)
-                new_user.create_user()
-                print('\n   Label information:')
-                print(f'\t   Ticket info: {" ".join(name)} {ritm} {req}')
-                print(f'\t   Address: {address}')
-                print(f'\t   Hardware: {requested_item} {" ".join(add_items)}')
-                print(f'\t   Need by: {need_by}')
+                create_user(scraper)
             
             if choice == 'c':
                 print("   Starting the task closing process...")
@@ -100,6 +103,9 @@ if __name__ == '__main__':
             print(f'   {traceback.format_exc()}')
         except NoSuchFrameException:
             print('\n   CRITICAL ERROR: No frame was found.')
+            print(f'   {traceback.format_exc()}')
+        except ElementClickInterceptedException:
+            # TODO: this exception has a 20% chance of happening, try to fix it.
             print(f'   {traceback.format_exc()}')
             
         input("\n   Press 'enter' to return back to menu.")

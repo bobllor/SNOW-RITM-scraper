@@ -26,7 +26,7 @@ class Login:
 
         self.driver.switch_to.default_content()
         
-        print("\n   Login complete.")
+        print("   Login complete.")
         time.sleep(8)
 
 class ScrapeRITM:
@@ -63,7 +63,7 @@ class ScrapeRITM:
         global_search.send_keys(Keys.DELETE)
 
     # NOTE: this function alone can be used to generate a label with my FedEx label program.
-    def scrape_ritm(self):
+    def scrape_ritm(self) -> None:
         #self.driver.switch_to.frame("gsft_main")
 
         req = self.scrape_req()
@@ -81,7 +81,7 @@ class ScrapeRITM:
 
         return date
 
-    def scrape_name(self):
+    def scrape_name(self) -> list:
         self.driver.switch_to.frame("gsft_main")
 
         # xpath of first and last name child containers
@@ -108,7 +108,7 @@ class ScrapeRITM:
         
         return names
     
-    def scrape_address(self):
+    def scrape_address(self) -> list:
         # column xpath which divides the address container.
         column_xpath1 = '//div[@class="section-content catalog-section-content"]/div[1]'
         column_xpath2 = '//div[@class="section-content catalog-section-content"]/div[2]'
@@ -140,7 +140,7 @@ class ScrapeRITM:
     
         return " ".join(address)
     
-    def scrape_req(self):        
+    def scrape_req(self) -> str:        
         element_xpath = self.driver.find_element(By.XPATH, self.req_xpath)
         req = element_xpath.get_attribute("value")
 
@@ -269,7 +269,7 @@ class UserCreation:
         self.link = link
         self.name = name
 
-        # company info, instances are initialized from a list from ScrapeRITM
+        # company info, 8 instances are initialized from a list from ScrapeRITM.
         # in order: email, employee ID, division #, company ID, company name, office ID, project ID, and organization
         self.email = user_info[0].strip()
         self.eid = user_info[1]
@@ -314,6 +314,7 @@ class UserCreation:
 
         errors = self.save_user()
         if errors is False and self.existing_user is False:
+            print('   DEBUG FINDING OUT ISSUE WITH CREATING USERS 1')
             self.search_user_list(15)
             self.fill_user()
             print("\n   User created. Please check the information before continuing.")
@@ -334,7 +335,6 @@ class UserCreation:
         time.sleep(3)
 
         errors = self.user_error_msg_check()
-
         time.sleep(3)
 
         # returns T/F if there was an error found during the user creation process.
@@ -345,22 +345,27 @@ class UserCreation:
             # are determined inside the function call below. uses create_user() and fill_user().
             print('\n   WARNING: User already exists in the database!')
             print('   Checking the existing user\'s information.')
-            time.sleep(3)
+            time.sleep(2)
             self.error_duplicate_key()
+            time.sleep(2)
         elif 'The following mandatory fields' in errors[0]:
-            print("\n   WARNING: The company name does not exist.")
-            print('   Checking the company lookup list for the company name.')
+            print("\n   WARNING: An error ocurred with the company field!")
+            print('   Searching the company name list.')
             time.sleep(2)
             self.error_invalid_company()
+            time.sleep(2)
         elif 'Invalid email address' in errors[0]:
-            print('\n   WARNING: An invalid email address was detected!')
+            print('\n   WARNING: An error ocurred with the email address!')
             print('   Replacing the email with the username.')
-            time.sleep(3)
+            time.sleep(2)
             self.error_invalid_email()
-            time.sleep(3)
+            time.sleep(2)
         elif 'Invalid update' in errors[0]:
-            print('\n   WARNING: The project ID is invalid!')
+            print('\n   WARNING: An error ocurred with the project ID field!')
+            print('   Searching the project ID list.')
+            time.sleep(2)
             self.error_project_id()
+            time.sleep(2)
         else:
             print("\n   WARNING: An error has occurred with creating a new user.")
             print("   The automatation will stop here, manual input to finish the user is required.")
@@ -369,6 +374,7 @@ class UserCreation:
 
         if errors:
             if self.existing_user is False:
+                print('   DEBUG FINDING OUT ISSUE WITH CREATING USERS 2')
                 self.save_user()
                 self.search_user_list(15)
                 self.fill_user()
@@ -524,9 +530,10 @@ class UserCreation:
         
         # search for if the error exists
         for error in error_list:
-            if error != error_list[2]:
-                element_xpath = self.driver.find_elements(By.XPATH, f'//span[contains(text(), "{error}")]')
-            else:
+            element_xpath = self.driver.find_elements(By.XPATH, f'//span[contains(text(), "{error}")]')
+
+            # invalid email address and invalid update use the same tag.
+            if error == error_list[2] or error == error_list[3]:
                 element_xpath = self.driver.find_elements(By.XPATH, f'//div[contains(text(), "{error}")]')
 
             if element_xpath:
@@ -539,7 +546,6 @@ class UserCreation:
     # DUPLICATE KEY ERROR, compares the existing user with the info inside the RITM ticket.
     # NOTE: don't bother refactoring this, i can tell this is a lot of unnecessary work - Tri | 8/15/2024.
     def error_duplicate_key(self):
-        # TODO: check if all cells match, then don't do anything.
         self.search_user_list(5)
         
         # bool to check if the items matches
@@ -663,7 +669,8 @@ class UserCreation:
         project_id = '//a[@role="button"]'
 
         project_list = self.driver.find_elements(By.XPATH, f'{project_table}{project_id}[contains(text(), "{self.pid}")]')
-
+        
+        found = False
         if project_list:
             for project in project_list:
                 if self.pid == project.text:
@@ -672,16 +679,59 @@ class UserCreation:
                     time.sleep(1.5)
                     self.driver.switch_to.window(default_window)
                     break
-                else:
-                    found = False
         
         if project_list == [] or found is False:
-            print('   WIP')
             new_button = self.driver.find_element(By.XPATH, '//button[@value="sysverb_new"]')
-            # TODO: fill in project ID, primary POC (CSA), division, allocation (GS/STAFFING).
-            # TODO: fill in the date, this requires extra steps (open calender, select today, hit enter/save)
-            time.sleep(1.5)
+            new_button.click()
+            time.sleep(3)
 
+            pid_field = self.driver.find_element(By.XPATH, '//input[@id="u_projects.u_project_number"]')
+            pid_field.send_keys(self.pid)
+            time.sleep(1)
+
+            # primary point of contact- the requestor.
+            ppoc_field = self.driver.find_element(By.XPATH, '//input[@id="sys_display.u_projects.u_primary_poc"]')
+            ppoc_field.send_keys('REPLACE_ME')
+            time.sleep(1)
+
+            company_field = self.driver.find_element(By.XPATH, '//input[@id="sys_display.u_projects.u_company"]')
+            company_field.send_keys(self.company)
+            time.sleep(1)
+
+            allocation_field_xpath = '//select[@id="u_projects.u_allocation"]'
+            if self.org == 'GS':
+                allocation_select = self.driver.find_element(By.XPATH, f'{allocation_field_xpath}/option[@value="Global Services"]')
+            elif self.org == 'TEKSTAFFING':
+                allocation_select = self.driver.find_element(By.XPATH, f'{allocation_field_xpath}/option[@value="Staffing"]')
+            allocation_select.click()
+            time.sleep(2)
+
+            div_field = self.driver.find_element(By.XPATH, '//input[@id="u_projects.u_division"]')
+            div_field.send_keys(self.div)
+            time.sleep(1)
+
+            # select the date for the creation of the new PID.
+            created_on_btn = self.driver.find_element(By.XPATH, '//button[@class="btn btn-default btn-ref date_time_trigger"]')
+            created_on_btn.click()
+            time.sleep(3)
+            go_to_today = self.driver.find_element(By.XPATH, '//td[@class="calText calTodayText pointerhand"]')
+            go_to_today.click()
+            time.sleep(1)
+            save_today = self.driver.find_element(By.XPATH, '//button[@id="GwtDateTimePicker_ok"]')
+            save_today.click()
+            time.sleep(2)
+
+            save_btn = '//button[@value="sysverb_insert_and_stay"]'
+            save_btn.click()
+            time.sleep(2)
+
+            self.driver.close()
+            time.sleep(1)
+            self.driver.switch_to.window(default_window)
+            self.driver.switch_to.default_content()
+
+            self.error_project_id()
+    
     # INVALID EMAIL ERROR, replaces email address with username instead.
     def error_invalid_email(self):
         # change the user's email to the username instead.
@@ -768,21 +818,44 @@ class UserCreation:
     
     def format_project_id(self):
         pid = self.pid
-        # 000011111(1), 9-10 digits long and first 4 digits must be 0.
-        pid_format = re.compile(r'^(0{4})([0-9]{5,6})$')
+        # first 4 digits must be '0' / the remaining digits must be between 5 to 6 characters in length.
+        pid_prefix = re.compile(r'^([0]{4})$')
+        pid_suffix = re.compile(r'^([0-9]{5,6})$')
         counter = 0
 
-        if pid_format.match(pid):
-            self.pid = pid
+        if pid_prefix.match(pid[:4]):
+            if pid_suffix.match(pid[4:]):
+                self.pid = pid
+            else:
+                # TODO: ADD A CUSTOM EXCEPTION.
+                raise NoSuchElementException
         else:
-            if pid.startswith("0000") is False:
-                for char in pid[:4]:
-                    if char == "0":
+        # counts how many 0s are in the beginning, when a different character is read, break out the loop.
+            if pid_prefix.match(pid[:4]) is None:
+                for char in pid:
+                    if char == '0':
                         counter += 1
+                        if counter == 4:
+                            break
+                    else:
+                        break
+                        
+                # append X zeroes to the beginning if they are missing.
+                difference = 4 - counter
+                text = 'zeroes'
+                if difference <= 1:
+                    text = 'zero'
+                zeroes = '0' * difference
+                pid = zeroes + pid
 
-                zeroes = 4 - counter
-                prefix = "0" * zeroes
-                self.pid = prefix + pid
+                print(f'   Project ID is incorrect, added in {difference} {text}.')
+
+                # check if the last 5-6 digits are correct.
+                if pid_suffix.match(pid[4:]):
+                    self.pid = pid
+                else:
+                    # TODO: ADD A CUSTOM EXCEPTION.
+                    raise NoSuchElementException
 
 class AdminRights:
     # blanket admin rights:
