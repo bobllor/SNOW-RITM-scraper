@@ -47,15 +47,15 @@ if __name__ == '__main__':
     new_user_link = 'https://tek.service-now.com/nav_to.do?uri=%2Fsys_user.do%3Fsys_id%3D-1%26sys_is_list%3Dtrue%26sys_target%3Dsys_user%26sysparm_checked_items%3D%26sysparm_fixed_query%3D%26sysparm_group_sort%3D%26sysparm_list_css%3D%26sysparm_query%3DGOTO123TEXTQUERY321%3DDavid%2BKvachev%26sysparm_referring_url%3Dsys_user_list.do%3Fsysparm_query%3DGOTO123TEXTQUERY321%253DDavid%2BKvachev@99@sysparm_first_row%3D1%26sysparm_target%3D%26sysparm_view%3D'
     
     while True:
-        choice = menu.main_menu()
-
-        if choice == 'd':
-            break
-        
         os.system('cls')
         print("\n   ENTER AN RITM NUMBER")
+        print("   Enter 'QUIT' to exit out of the program.")
         print("\n   Valid inputs: RITM1234567 | 1234567")
         ritm = input("\n   Enter an RITM to search: ")
+
+        if ritm == 'QUIT':
+            break
+
         ritm_checker = re.compile(r'^([RITM]{4})([0-9]{7})\b')
 
         if ritm.isdigit():
@@ -67,6 +67,7 @@ if __name__ == '__main__':
                 break
             else:
                 print("\n   RITM number format is wrong.")
+                print("   Enter 'QUIT' to exit out of the program.")
                 print("\n   Valid inputs: RITM1234567 | 1234567")
                 ritm = input("\n   Enter an RITM number: ")
 
@@ -75,38 +76,13 @@ if __name__ == '__main__':
             scraper = ScrapeRITM(driver, ritm)
             scraper.search_ritm()
 
-            # TODO: tie in with my fedex label maker
-            # FedEx requirements: RITM, REQ, address, and name.
-            if choice == 'a':
-                print("\n   Work in progress")
-                time.sleep(4)
-
-                #print("Obtaining information for label creation...")
-            
-                '''req, name, address = scraper.scrape_ritm()
-                # remove this later, used for debugging purposes
-                print(f"{ritm} {req} {name} {address}")'''
-            
-            if choice == 'b':
-                create_user(scraper)
-            
-            if choice == 'c':
-                print("   Starting the task closing process...")
-
-                task = TaskComplete(driver)
-                task.complete_task()
-                print("   Task closed.")
-        
+            create_user(scraper)
         # TODO: implement logging for exceptions
-        except NoSuchElementException:
-            print('\n   CRITICAL ERROR: An element cannot be found associated with the RITM ticket.')
-            print(f'   {traceback.format_exc()}')
-        except NoSuchFrameException:
-            print('\n   CRITICAL ERROR: No frame was found.')
-            print(f'   {traceback.format_exc()}')
+        except (NoSuchElementException, NoSuchFrameException):
+            print('\n   CRITICAL ERROR: Something went wrong during the process. The error has been logged.')
+            logger(traceback.format_exc())
         except ElementClickInterceptedException:
-            # TODO: this exception has a 20% chance of happening, try to fix it.
-            print(f'   {traceback.format_exc()}')
+            print('\n   ERROR: Something went wrong during the process. Please try again.')
             
         input("\n   Press 'enter' to return back to menu.")
         os.system('cls')

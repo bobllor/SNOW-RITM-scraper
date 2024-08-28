@@ -2,6 +2,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import NoSuchElementException, NoSuchFrameException
+from selenium.webdriver.support.wait import WebDriverWait
 import time, re
 
 class Login:
@@ -16,7 +17,11 @@ class Login:
 
         time.sleep(5)
         
-        self.driver.switch_to.frame("gsft_main")
+        # used in case login page is changed due to new SNOW instance.
+        try:
+            self.driver.switch_to.frame("gsft_main")
+        except:
+            pass
 
         self.driver.find_element(By.ID, "user_name").send_keys(self.user)
         time.sleep(3)
@@ -30,7 +35,7 @@ class Login:
         time.sleep(8)
 
 class ScrapeRITM:
-    def __init__(self, driver, ritm):
+    def __init__(self, driver, ritm: str):
         self.driver = driver
         self.ritm = ritm
 
@@ -63,7 +68,7 @@ class ScrapeRITM:
         global_search.send_keys(Keys.DELETE)
 
     # NOTE: this function alone can be used to generate a label with my FedEx label program.
-    def scrape_ritm(self) -> None:
+    def scrape_ritm(self):
         #self.driver.switch_to.frame("gsft_main")
 
         req = self.scrape_req()
@@ -264,7 +269,7 @@ class ScrapeRITM:
 
 # NOTE: still requires manual input if something goes wrong.
 class UserCreation:
-    def __init__(self, driver, link, user_info, name):
+    def __init__(self, driver, link: str, user_info: list, name: list):
         self.driver = driver
         self.link = link
         self.name = name
@@ -288,10 +293,11 @@ class UserCreation:
         # NOTE: the first duplicate user starts at 2.
         self.user_name_unique_id = 1
 
-        # bool to check if a user already exists, if true it does not intiiate
-        # the fill_user() process below.
+        # bool to check if a user already exists, then modify the user instead of creating a new one.
         # by default it is False- meaning that it should attempt to create a new user every time.
         self.existing_user = False
+        # used to stop a recursion issue, i do not know why it works.
+        self.loop_once = False
 
     def create_user(self):
         self.driver.get(self.link)
@@ -304,9 +310,9 @@ class UserCreation:
 
         f_name, l_name = self.name_keys()
         
-        if self.user_name_unique_id == 1:
-            self.user_name = f"{f_name}.{l_name}@teksystemsgs.com"
-        else:
+        self.user_name = f"{f_name}.{l_name}@teksystemsgs.com"
+        # if the unique ID is > 1, then this is a different user with the same name as an existing one.
+        if self.user_name_unique_id > 1:
             self.user_name = f'{f_name}.{l_name}{str(self.user_name_unique_id)}@teksystemsgs.com'
         self.send_email_keys()
 
@@ -314,17 +320,13 @@ class UserCreation:
 
         errors = self.save_user()
         if errors is False and self.existing_user is False:
-            print('   DEBUG FINDING OUT ISSUE WITH CREATING USERS 1')
             self.search_user_list(15)
             self.fill_user()
             print("\n   User created. Please check the information before continuing.")
         else:
-            # check save_users(), if errors is True and existing_user is False then execute
-            # the new user creation. to be honest, i could just make new user creation into a function.
-            # TODO: make it into a function. maybe.
             print("\n   Error handled, user updated accordingly. Please check the information before continuing.")
     
-    def save_user(self):
+    def save_user(self) -> bool:
         self.driver.switch_to.default_content()
         self.driver.switch_to.frame('gsft_main')
         save_btn_xpath = '//button[@id="sysverb_insert_and_stay"]'
@@ -345,27 +347,21 @@ class UserCreation:
             # are determined inside the function call below. uses create_user() and fill_user().
             print('\n   WARNING: User already exists in the database!')
             print('   Checking the existing user\'s information.')
-            time.sleep(2)
             self.error_duplicate_key()
             time.sleep(2)
         elif 'The following mandatory fields' in errors[0]:
             print("\n   WARNING: An error ocurred with the company field!")
             print('   Searching the company name list.')
-            time.sleep(2)
             self.error_invalid_company()
             time.sleep(2)
         elif 'Invalid email address' in errors[0]:
             print('\n   WARNING: An error ocurred with the email address!')
             print('   Replacing the email with the username.')
-            time.sleep(2)
             self.error_invalid_email()
-            time.sleep(2)
         elif 'Invalid update' in errors[0]:
             print('\n   WARNING: An error ocurred with the project ID field!')
             print('   Searching the project ID list.')
-            time.sleep(2)
             self.error_project_id()
-            time.sleep(2)
         else:
             print("\n   WARNING: An error has occurred with creating a new user.")
             print("   The automatation will stop here, manual input to finish the user is required.")
@@ -374,12 +370,11 @@ class UserCreation:
 
         if errors:
             if self.existing_user is False:
-                print('   DEBUG FINDING OUT ISSUE WITH CREATING USERS 2')
                 self.save_user()
                 self.search_user_list(15)
                 self.fill_user()
 
-            return True
+        return True
 
     def search_user_list(self, time_to_wait):
         user_link = 'https://tek.service-now.com/nav_to.do?uri=%2Fsys_user_list.do%3Fsysparm_clear_stack%3Dtrue%26sysparm_userpref_module%3D62354a4fc0a801941509bc63f8c4b979'
@@ -404,116 +399,123 @@ class UserCreation:
 
     # used for both filling and checking the user information.
     def fill_user(self):
-        keys_to_send = [self.cid, self.oid, self.oid, self.oid_location, self.div]
-        user_cells_obj = []
-        user_cell_xpath = '//tbody[@class="list2_body"]'
+        if self.loop_once is False:
+            keys_to_send = [self.cid, self.oid, self.oid, self.oid_location, self.div]
+            user_cells_obj = []
+            user_cell_xpath = '//tbody[@class="list2_body"]'
 
-        # cell positions: 5* 6 7 8 9 10
-        # PID*, CID, OID, OID, office location, division
-        # *only used if duplicate user is true.
-        for i in range(6, 11):
-            user_cell = f'{user_cell_xpath}//td[{i}]'
-           
-            user_cells_obj.append(user_cell)
+            # cell positions: 5* 6 7 8 9 10
+            # PID*, CID, OID, OID, office location, division
+            # *only used if duplicate user is true.
+            for i in range(6, 11):
+                user_cell = f'{user_cell_xpath}//td[{i}]'
+            
+                user_cells_obj.append(user_cell)
+            
+            if self.existing_user:
+                # PID cell, this will get changed later- for now it is used
+                # to check the value of the cell.
+                user_cells_obj.insert(0, f'{user_cell_xpath}//td[5]')
+                keys_to_send.insert(0, self.pid)
+            else:
+                # remove oid/3rd element as it is filled during the user creation.
+                keys_to_send.pop(2)
+                user_cells_obj.pop(2)
         
-        if self.existing_user:
-            # PID cell, this will get changed later- for now it is used
-            # to check the value of the cell.
-            user_cells_obj.insert(0, f'{user_cell_xpath}//td[5]')
-            keys_to_send.insert(0, self.pid)
-        else:
-            # remove oid/3rd element as it is filled during the user creation.
-            keys_to_send.pop(2)
-            user_cells_obj.pop(2)
-    
-        elements_obj = []
-        for path in user_cells_obj:
-            element_xpath = self.driver.find_element(By.XPATH, path)
-            elements_obj.append(element_xpath)
+            elements_obj = []
+            for path in user_cells_obj:
+                element_xpath = self.driver.find_element(By.XPATH, path)
+                elements_obj.append(element_xpath)
 
-        # checks if the cell values are the same as the ticket info.
-        # if True, then remove the web object from the list to not fill.
-        if self.existing_user:
-            index_remover = []
-            cell_names = ['Project ID', 'Customer ID', 'Office Number',
-                          'Office ID', 'Office Location', 'Division']
-            for index, web_obj in enumerate(elements_obj):
-                if web_obj.text == keys_to_send[index]:
-                    print(f'   {cell_names[index]} {web_obj.text} matches.')
-                    index_remover.append(index)
-                else:
-                    print(f'   {cell_names[index]} {web_obj.text} does not match.')
-            
-            for index in sorted(index_remover, reverse=True):
-                del elements_obj[index]
-                del keys_to_send[index]
-            
-            if keys_to_send:
-                # changes the PID cell (//td[5]) to the name cell (//td[4]).
-                # this is done to work around the href link found in //td[5].
-                # check while loop below, TL;DR: Right Arrow -> Enter (bypasses the link).
-                if keys_to_send[0] == self.pid:
-                    elements_obj[0] = self.driver.find_element(By.XPATH, f'{user_cell_xpath}//td[4]')
-
-        time.sleep(5)
-        print("\n   Inserting in consultant values...")
-
-        count = 0
-        repeat_attempts = 0
-        while count < len(keys_to_send) and repeat_attempts != 3:
-            # try block is used to keep trying in case an error occurs 
-            # during the attempt to fill a status cell in, max 3 repeats.
-            try:
-                print(f'   Inserting {keys_to_send[count]}...')
-                if keys_to_send[count] == self.pid:
-                    # workaround the issue with the href link located in the PID cell.
-                    # if it works it ain't stupid!
-                    ActionChains(self.driver).click(elements_obj[count]).perform()
-                    time.sleep(1)
-                    ActionChains(self.driver).send_keys(Keys.ARROW_RIGHT).perform()
-                    time.sleep(1)
-                    ActionChains(self.driver).send_keys(Keys.ENTER).perform()
-                    time.sleep(1)
-                    cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="sys_display.LIST_EDIT_sys_user.u_project_id"]')
-                else:
-                    ActionChains(self.driver).double_click(elements_obj[count]).perform()
-                    time.sleep(1)
-                    cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="cell_edit_value"]')
-
-                time.sleep(1)
-
-                # normally opening the cell already highlights the entire text,
-                # but just to be safe this will remove it also.
-                if cell_edit_value.text:
-                    cell_edit_value.send_keys(Keys.CONTROL + "a")
-                    time.sleep(1)
-                    cell_edit_value.send_keys(Keys.DELETE)
-                    time.sleep(1)
-
-                cell_edit_value.send_keys(keys_to_send[count])
-                time.sleep(1)
-                cell_edit_value.send_keys(Keys.ENTER)
-                time.sleep(1)
+            # checks if the cell values are the same as the ticket info.
+            # if True, then remove the web object from the list to not fill.
+            if self.existing_user:
+                index_remover = []
+                cell_names = ['Project ID', 'Customer ID', 'Office Number',
+                            'Office ID', 'Office Location', 'Division']
+                match_count = 0
+                for index, web_obj in enumerate(elements_obj):
+                    if web_obj.text == keys_to_send[index]:
+                        print(f'   {cell_names[index]} {web_obj.text} matches.')
+                        time.sleep(.5)
+                        index_remover.append(index)
+                        match_count += 1
+                    else:
+                        print(f'   {cell_names[index]} {web_obj.text} does not match.')
                 
-                count += 1
-                # if successful, reset repeat_attempts to 0.
-                repeat_attempts = 0
-                time.sleep(2)
-            except NoSuchElementException:
-                repeat_attempts += 1
-                if 3 - repeat_attempts <= 1:
-                    text_times = 'time'
-                else:
-                    text_times = 'times'
-                print(f'   Failed inserting {keys_to_send[count]}. Repeating {3 - repeat_attempts} {text_times}.')
-                time.sleep(2)
-        
-        if repeat_attempts != 3:
-            print("   User filling completed.")
-        else:
-            # TODO: use an actual exception here, maybe a custom one?
-            raise NoSuchElementException
-        time.sleep(5)
+                for index in sorted(index_remover, reverse=True):
+                    del elements_obj[index]
+                    del keys_to_send[index]
+
+                if match_count == 6:
+                    print('   No values need to be updated.')
+                    return
+                
+                if keys_to_send:
+                    # changes the PID cell (//td[5]) to the name cell (//td[4]).
+                    # this is done to work around the href link found in //td[5].
+                    # check while loop below, TL;DR: Right Arrow -> Enter (bypasses the link).
+                    if keys_to_send[0] == self.pid:
+                        elements_obj[0] = self.driver.find_element(By.XPATH, f'{user_cell_xpath}//td[4]')
+
+            time.sleep(5)
+            print("\n   Inserting in consultant values...")
+
+            count = 0
+            repeat_attempts = 0
+            while count < len(keys_to_send) and repeat_attempts != 3:
+                # try block is used to keep trying in case an error occurs 
+                # during the attempt to fill a status cell in, max 3 repeats.
+                try:
+                    print(f'   Inserting {keys_to_send[count]}...')
+                    if keys_to_send[count] == self.pid:
+                        # workaround the issue with the href link located in the PID cell.
+                        # if it works it ain't stupid!
+                        ActionChains(self.driver).click(elements_obj[count]).perform()
+                        time.sleep(1)
+                        ActionChains(self.driver).send_keys(Keys.ARROW_RIGHT).perform()
+                        time.sleep(1)
+                        ActionChains(self.driver).send_keys(Keys.ENTER).perform()
+                        time.sleep(1)
+                        cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="sys_display.LIST_EDIT_sys_user.u_project_id"]')
+                    else:
+                        ActionChains(self.driver).double_click(elements_obj[count]).perform()
+                        time.sleep(1)
+                        cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="cell_edit_value"]')
+
+                    time.sleep(1)
+
+                    # normally opening the cell already highlights the entire text,
+                    # but just to be safe this will remove it also.
+                    if cell_edit_value.text:
+                        cell_edit_value.send_keys(Keys.CONTROL + "a")
+                        time.sleep(1)
+                        cell_edit_value.send_keys(Keys.DELETE)
+                        time.sleep(1)
+
+                    cell_edit_value.send_keys(keys_to_send[count])
+                    time.sleep(1)
+                    cell_edit_value.send_keys(Keys.ENTER)
+                    time.sleep(1)
+                    
+                    count += 1
+                    # if successful, reset repeat_attempts to 0.
+                    repeat_attempts = 0
+                    time.sleep(2)
+                except NoSuchElementException:
+                    repeat_attempts += 1
+                    if 3 - repeat_attempts <= 1:
+                        text_times = 'time'
+                    else:
+                        text_times = 'times'
+                    print(f'   Failed inserting {keys_to_send[count]}. Repeating {3 - repeat_attempts} {text_times}.')
+                    time.sleep(2)
+            
+            if repeat_attempts != 3:
+                print("   User filling completed.")
+            else:
+                # TODO: use an actual exception here, maybe a custom one?
+                raise NoSuchElementException
 
     def user_error_msg_check(self):
         '''
@@ -576,16 +578,18 @@ class UserCreation:
         if eid_check is True or email_check is True:
             print('   Existing user is the same from the RITM ticket, updating relevant information.')
             time.sleep(3)
-            # triggers that the existing user needs to be modified
-            self.existing_user = True
-            self.fill_user()
+            # triggers that the existing user needs to be modified.
+            if self.existing_user is False:
+                self.existing_user = True
+                self.fill_user()
+                # stops a recursion, i do not know why this happens but this fixes it.
+                self.loop_once = True
         else:
             # adjust the username by adding in first.name{1 + i}@... depending on how many exists.
             # NOTE: there is a 99% chance that a third same-name user won't be needed, but keep it in mind!
             print('   Existing user is a different user, creating new user with updated username.')
             self.user_name_unique_id += 1
             self.create_user()
-            time.sleep(3)
 
     # INVALID COMPANY/COMPANY DOESN'T EXIST, select the company from the list or create a new one.
     def error_invalid_company(self):
@@ -667,6 +671,15 @@ class UserCreation:
         
         project_table = '//tbody[@class="list2_body"]'
         project_id = '//a[@role="button"]'
+
+        search_container = '//div[@role="search"]'
+        search_xpath = f'{search_container}/input[@type="search"]'
+
+        search = self.driver.find_element(By.XPATH, search_xpath)
+        search.send_keys(self.pid)
+        time.sleep(.5)
+        search.send_keys(Keys.ENTER)
+        time.sleep(3)
 
         project_list = self.driver.find_elements(By.XPATH, f'{project_table}{project_id}[contains(text(), "{self.pid}")]')
         
@@ -765,6 +778,7 @@ class UserCreation:
     
     # fills in username (first.last@teksystemsgs.com), and their personal email.
     def send_email_keys(self):
+        email_check = re.compile(r'(^[A-Za-z0-9_.-]{1,320})@([A-Za-z]{1,253}).([A-Za-z]*)$')
         self.driver.find_element(By.ID, "sys_user.user_name").send_keys(self.user_name)
         time.sleep(1.5)
         
@@ -773,6 +787,11 @@ class UserCreation:
         personal_key = self.email
         
         if self.email.upper() == 'TBD' or self.email == '':
+            email_key = self.user_name
+            personal_key = ''
+        
+        # used for very bad email addresses.
+        if email_check.match(self.email) is None:
             email_key = self.user_name
             personal_key = ''
 
@@ -785,18 +804,17 @@ class UserCreation:
     def send_org_keys(self):
         if self.org == 'GS':
             self.format_project_id()
-            self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.pid)
-        else:
-            self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.pid)
+        self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.pid)
       
-        time.sleep(1.5)
-
-        self.driver.find_element(By.ID, "sys_display.sys_user.company").send_keys(self.company)
         time.sleep(1.5)
 
         self.format_office_id()
         self.driver.find_element(By.ID, "sys_user.u_office_id").send_keys(self.oid)
+        
+        time.sleep(1.5)
 
+        self.driver.find_element(By.ID, 'sys_display.sys_user.company').send_keys(self.company)
+ 
     def format_office_id(self):
         full_oid = self.oid
         full_oid = full_oid.split("-", 1)

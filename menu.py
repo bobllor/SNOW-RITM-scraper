@@ -12,3 +12,6 @@ def main_menu():
         choice = input("   Enter an option: ").lower()
     
     return choice
+
+def ritm_validation(ritm: str) -> bool:
+    pass
