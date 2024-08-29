@@ -1,7 +1,7 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from snow_classes import Login, ScrapeRITM, UserCreation
-from task_completion import TaskComplete
+from snow.snow_classes import Login, UserCreation, ScrapeRITM
+from snow.task_completion import TaskComplete
 from selenium.common.exceptions import NoSuchFrameException, NoSuchElementException
 from selenium.common.exceptions import ElementClickInterceptedException
 import menu, os, time, re, traceback
@@ -70,6 +70,9 @@ if __name__ == '__main__':
                 print("   Enter 'QUIT' to exit out of the program.")
                 print("\n   Valid inputs: RITM1234567 | 1234567")
                 ritm = input("\n   Enter an RITM number: ")
+
+                if ritm == 'QUIT':
+                    break
 
         try:
             print("\n   Searching for RITM...")

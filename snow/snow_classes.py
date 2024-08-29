@@ -298,11 +298,14 @@ class UserCreation:
         self.existing_user = False
         # used to stop a recursion issue, i do not know why it works.
         self.loop_once = False
+        # oopsie! this is to prevent multiple companies creation, which is either temp or permanent-
+        # depending on if i want to find a solution. for now, it will raise an exception.
+        self.company_created = False
 
     def create_user(self):
         self.driver.get(self.link)
 
-        time.sleep(5)
+        time.sleep(3)
 
         self.driver.switch_to.frame("gsft_main")
 
@@ -625,31 +628,38 @@ class UserCreation:
                     break
                 else:
                     found = False
+        
+        if self.company_created is False:
+            if company_list == [] or found is False:
+                # apparently this crashes the program, i am unsure why since there are
+                # rarely any tickets that requires a new company to be made.
+                print('\n   Company is not found in the list. Creating a new company name.')
+                time.sleep(1.5)
 
-        if company_list == [] or found is False:
-            # apparently this crashes the program, i am unsure why since there are
-            # rarely any tickets that requires a new company to be made.
-            print('\n   Company is not found in the list. Creating a new company name.')
-            time.sleep(1.5)
+                new_company_button = self.driver.find_element(By.XPATH, '//button[@type="submit"]')
+                new_company_button.click()
+                time.sleep(3)
 
-            new_company_button = self.driver.find_element(By.XPATH, '//button[@type="submit"]')
-            new_company_button.click()
-            time.sleep(3)
+                name_field = self.driver.find_element(By.XPATH, '//input[@name="core_company.name"]')
+                name_field.send_keys(self.company)
+                time.sleep(1.5)
+                save_button = self.driver.find_element(By.XPATH, '//button[@value="sysverb_insert_and_stay"]')
+                save_button.click()
+                time.sleep(1.5)
 
-            name_field = self.driver.find_element(By.XPATH, '//input[@name="core_company.name"]')
-            name_field.send_keys(self.company)
-            time.sleep(1.5)
-            save_button = self.driver.find_element(By.XPATH, '//button[@value="sysverb_insert_and_stay"]')
-            save_button.click()
-            time.sleep(1.5)
+                self.driver.close()
+                time.sleep(1.5)
+                self.driver.switch_to.window(default_window)
+                self.driver.switch_to.default_content()
 
-            self.driver.close()
-            time.sleep(1.5)
-            self.driver.switch_to.window(default_window)
-            self.driver.switch_to.default_content()
+                # prevent an infinite loop.
+                self.company_created = True
 
-            # call function again to select the company name.
-            self.error_invalid_company()
+                # call function again to select the company name.
+                self.error_invalid_company()
+        else:
+            # temporary exception, used to prevent accidental multiple companies creation.
+            raise NoSuchElementException
     
     # INVALID PROJECT ID, select the project ID from the list or create a new one.
     def error_project_id(self):
@@ -679,7 +689,7 @@ class UserCreation:
         search.send_keys(self.pid)
         time.sleep(.5)
         search.send_keys(Keys.ENTER)
-        time.sleep(3)
+        time.sleep(2)
 
         project_list = self.driver.find_elements(By.XPATH, f'{project_table}{project_id}[contains(text(), "{self.pid}")]')
         
@@ -693,6 +703,7 @@ class UserCreation:
                     self.driver.switch_to.window(default_window)
                     break
         
+        # create a new project ID.
         if project_list == [] or found is False:
             new_button = self.driver.find_element(By.XPATH, '//button[@value="sysverb_new"]')
             new_button.click()
@@ -734,7 +745,7 @@ class UserCreation:
             save_today.click()
             time.sleep(2)
 
-            save_btn = '//button[@value="sysverb_insert_and_stay"]'
+            save_btn = self.driver.find_element(By.XPATH, '//button[@value="sysverb_insert_and_stay"]')
             save_btn.click()
             time.sleep(2)
 
