@@ -1,25 +1,26 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from snow.snow_classes import Login, UserCreation, ScrapeRITM
-from snow.task_completion import TaskComplete
-from selenium.common.exceptions import NoSuchFrameException, NoSuchElementException
+from core.login import Login
+from core.scrape import ScrapeRITM
+from core.create_user import UserCreation
+from core.vtb_scanner import VTBScanner
+from components.acc import get_accs
+from components.links import Links
+from selenium.common.exceptions import NoSuchFrameException, NoSuchElementException 
 from selenium.common.exceptions import ElementClickInterceptedException
-import menu, os, time, re, traceback
-import debug
+import os, time, traceback
 from log import logger
-from acc import get_accs
 
-def create_user(scraper: ScrapeRITM):
+def create_user(scraper: ScrapeRITM, links: Links):
     print("\n   Obtaining information for user creation...")
     name = scraper.scrape_name()
     req, address = scraper.scrape_ritm()
     user_info = scraper.scrape_user_info()
     need_by = scraper.scrape_need_by_date()
     requested_item, add_items = scraper.scrape_hardware()
-    # remove this later, used for debugging purposes
-    debug.debug_ritm_info(user_info, name)
+    requestor = scraper.scrape_requestor()
 
-    new_user = UserCreation(driver, new_user_link, user_info, name)
+    new_user = UserCreation(driver, links.new_user, user_info, name, requestor)
     print("\n   Starting user creation process.")
     time.sleep(3)
     new_user.create_user()
@@ -36,58 +37,55 @@ if __name__ == '__main__':
     driver = webdriver.Chrome(options=options)
 
     user, pw = get_accs()
-    login_link = "https://tek.service-now.com/navpage.do"
-    login = Login(driver, login_link, user, pw)
+    links = Links()
+    login = Login(driver, links.dashboard, user, pw)
     print("\n   Logging in...")
     login.login_sn()
     os.system('cls')
 
-    # search for an RITM ticket and scrape the info on the ticket
-    # xpath for global search in order to enter the RITM number
-    new_user_link = 'https://tek.service-now.com/nav_to.do?uri=%2Fsys_user.do%3Fsys_id%3D-1%26sys_is_list%3Dtrue%26sys_target%3Dsys_user%26sysparm_checked_items%3D%26sysparm_fixed_query%3D%26sysparm_group_sort%3D%26sysparm_list_css%3D%26sysparm_query%3DGOTO123TEXTQUERY321%3DDavid%2BKvachev%26sysparm_referring_url%3Dsys_user_list.do%3Fsysparm_query%3DGOTO123TEXTQUERY321%253DDavid%2BKvachev@99@sysparm_first_row%3D1%26sysparm_target%3D%26sysparm_view%3D'
+    # used to break out of the loop, this is a temp variable while i work out the stuff.
+    stop = 0
     
-    while True:
-        os.system('cls')
-        print("\n   ENTER AN RITM NUMBER")
-        print("   Enter 'QUIT' to exit out of the program.")
-        print("\n   Valid inputs: RITM1234567 | 1234567")
-        ritm = input("\n   Enter an RITM to search: ")
+    os.system('cls')
+    print('\n   Getting to the Visual Task Board...')
+    scanner = VTBScanner(driver, links.vtb)
 
-        if ritm == 'QUIT':
-            break
+    # bool used to stop going back to the VTB IF NO RITMS are found.
+    found = True
+    print('\n   Scanning the VTB for tasks...')
+    time.sleep(2)
 
-        ritm_checker = re.compile(r'^([RITM]{4})([0-9]{7})\b')
-
-        if ritm.isdigit():
-            ritm = 'RITM' + ritm
-
-        while True:
-            os.system('cls')
-            if ritm_checker.match(ritm):
-                break
-            else:
-                print("\n   RITM number format is wrong.")
-                print("   Enter 'QUIT' to exit out of the program.")
-                print("\n   Valid inputs: RITM1234567 | 1234567")
-                ritm = input("\n   Enter an RITM number: ")
-
-                if ritm == 'QUIT':
-                    break
-
+    while stop < 10:
+        if found is True:
+            found = False
+            scanner.get_to_vtb()
+        ritm_list, ritm_elements, inc_elements = scanner.get_ritms()
+        
         try:
-            print("\n   Searching for RITM...")
-            scraper = ScrapeRITM(driver, ritm)
-            scraper.search_ritm()
+            if ritm_list:
+                found = True
+                for ritm in ritm_list:
+                    print(f"\n   Searching for {ritm}...")
+                    scraper = ScrapeRITM(driver, ritm)
+                    scraper.search_ritm()
 
-            create_user(scraper)
-        # TODO: implement logging for exceptions
+                    create_user(scraper, links)
+            else:
+                print('\n   No tasks were found.')
+                print('   Please wait 3 minutes for the next scan.')
+                time.sleep(1)
+                
+            # drag tasks to their respective lane.
+            if ritm_elements:
+                scanner.drag_task(ritm_elements, 'RITM')
+            if inc_elements:
+                scanner.drag_task(inc_elements, 'INC')
         except (NoSuchElementException, NoSuchFrameException):
             print('\n   CRITICAL ERROR: Something went wrong during the process. The error has been logged.')
             logger(traceback.format_exc())
         except ElementClickInterceptedException:
             print('\n   ERROR: Something went wrong during the process. Please try again.')
-            
-        input("\n   Press 'enter' to return back to menu.")
-        os.system('cls')
 
+        stop += 1
+            
     driver.quit()

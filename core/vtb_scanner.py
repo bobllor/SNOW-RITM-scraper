@@ -21,43 +21,55 @@ class VTBScanner():
 
     def get_to_vtb(self) -> None:
         self.driver.get(self.vtb_link)
-        time.sleep(10)
-        self.driver.switch_to.frame('gsft_main')
-        time.sleep(5)
+        time.sleep(7)
 
-    # NOTE: this is going to be ran indefinitely as it will be scanning the VTB for any incoming tasks.
     def get_ritms(self) -> list:
+        # NOTE: this is going to be ran indefinitely as it will be scanning the VTB for any incoming tasks.
         # xpath to the lane which contains the items to look for.
-        # NOTE: the lanes' tag is <li> with the attribute v-lane-index="i" and h-lane-index="i".
-        # v-lane indicates where 
-        # NOTE: the tickets' tag is <li> with the attribute role="listitem".
-        # completed lane = 4 0, custom software email req = 5 1
+        self.driver.switch_to.frame('gsft_main')
+        
         req_lane = '//li[@v-lane-index="0" and @h-lane-index="0"]'
         ritm_elements = self.driver.find_elements(By.XPATH, f'{req_lane}//a[contains(text(), "RITM")]')
         inc_elements = self.driver.find_elements(By.XPATH, f'{req_lane}//a[contains(text(), "INC")]')
+        
+        # limit the list to a maximum of 4.
+        # NOTE: i do not know why it breaks when it is > 4, i can't be bothered.
+        if len(ritm_elements) > 4:
+            ritm_elements = ritm_elements[:4]
+        if len(inc_elements) > 4:
+            inc_elements = inc_elements[:4]
 
         ritm_numbers = []
         if ritm_elements:
             for element in ritm_elements:
                 ritm_numbers.append(element.text)
 
-        if inc_elements:
-            for element in inc_elements:
-                self.drag_task(element, 'INC')
-
-        return ritm_numbers
+        self.driver.switch_to.default_content()
+        
+        return ritm_numbers, ritm_elements, inc_elements
     
-    def drag_task(self, source, type):
-        # by default, the lane will always start in the requests lane.
+    def drag_task(self, elements, type: str):
+        self.driver.switch_to.frame('gsft_main')
+
         lane = self.driver.find_element(By.XPATH, '//li[@v-lane-index="1" and @h-lane-index="0"]')
 
+        # by default, the task will be dragged over to the user created lane.
+        # if an INC is detected, then it will move it accordingly.
         if type == 'INC':
             inc_lane = self.driver.find_element(By.XPATH, '//li[@v-lane-index="2" and @h-lane-index="0"]')
             lane = inc_lane
 
-        drag_task = ActionChains(self.driver).click_and_hold(source)
-        drag_task.move_to_element(lane)
-        drag_task.release(lane).perform()
+        for element in elements:
+            # go back to select the parent container of the web element.
+            element = element.find_element(By.XPATH, '../..')
 
-        print(f'   {type} task moved.')
-        time.sleep(2)
+            drag_task = ActionChains(self.driver).click_and_hold(element)
+            time.sleep(1)
+            drag_task.move_to_element(lane)
+            time.sleep(1)
+            drag_task.release(lane).perform()
+
+            print('   Task dragged.')
+            time.sleep(1.5)
+        
+        self.driver.switch_to.default_content()
