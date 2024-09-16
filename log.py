@@ -6,7 +6,8 @@ log_file = parent_path / 'errors.log'
 
 def logger(exception_msg):
     # if the logs folder doesn't exist then make one.
-    parent_path.mkdir(parents=True, exist_ok=True)
+    if not parent_path.exists():
+        parent_path.mkdir(parents=True, exist_ok=True)
 
     logging.basicConfig(filename=log_file, level=logging.ERROR,
                         format='%(asctime)s | %(name)s: %(message)s',

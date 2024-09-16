@@ -3,6 +3,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support.wait import WebDriverWait
+from components.blanket_admin import AdminRights
 import time, re
 
 # NOTE: still requires manual input if something goes wrong.
@@ -24,6 +25,8 @@ class UserCreation:
         self.pid = user_info[6]
         self.org = user_info[7]
 
+        self.admin = AdminRights(self.company).check_blanket()
+
         # initialized in a future function call
         self.oid_location = ""
         self.user_name = ""
@@ -37,7 +40,7 @@ class UserCreation:
         self.existing_user = False
         # used to stop a recursion issue, i do not know why it works.
         self.loop_once = False
-        # oopsie! this is to prevent multiple companies creation, which is either temp or permanent-
+        # prevent multiple companies creation, which is either temp or permanent-
         # depending on if i want to find a solution. for now, it will raise an exception.
         self.company_created = False
 
@@ -48,17 +51,17 @@ class UserCreation:
 
         self.driver.switch_to.frame("gsft_main")
 
-        self.send_consultant_keys()
+        self.__send_consultant_keys()
 
-        f_name, l_name = self.name_keys()
+        f_name, l_name = self.__name_keys()
         
         self.user_name = f"{f_name}.{l_name}@teksystemsgs.com"
         # if the unique ID is > 1, then this is a different user with the same name as an existing one.
         if self.user_name_unique_id > 1:
             self.user_name = f'{f_name}.{l_name}{str(self.user_name_unique_id)}@teksystemsgs.com'
-        self.send_email_keys()
+        self.__send_email_keys()
 
-        self.send_org_keys()
+        self.__send_org_keys()
 
         errors = self.save_user()
         if errors is False and self.existing_user is False:
@@ -78,11 +81,10 @@ class UserCreation:
 
         self.driver.find_element(By.XPATH, save_btn_xpath).click()
 
-        time.sleep(2)
+        time.sleep(5)
 
         errors = self.user_error_msg_check()
-        time.sleep(3)
-
+        
         # returns T/F if there was an error found during the user creation process.
         if errors == [] and self.existing_user is False:
             return False
@@ -290,7 +292,7 @@ class UserCreation:
         return errors
 
     # DUPLICATE KEY ERROR, compares the existing user with the info inside the RITM ticket.
-    # NOTE: don't bother refactoring this. - Tri | 8/15/2024.
+    # NOTE: don't bother refactoring this.
     def error_duplicate_key(self):
         self.search_user_list(5)
         
@@ -511,7 +513,7 @@ class UserCreation:
         self.save_user()
     
     # fills in consultant first name, last name, and their employee ID.
-    def send_consultant_keys(self):
+    def __send_consultant_keys(self):
         self.driver.find_element(By.ID, "sys_user.first_name").send_keys(self.name[0])
         time.sleep(1.5)
         self.driver.find_element(By.ID, "sys_user.last_name").send_keys(self.name[1])
@@ -527,7 +529,7 @@ class UserCreation:
         time.sleep(3)
     
     # fills in username (first.last@teksystemsgs.com), and their personal email.
-    def send_email_keys(self):
+    def __send_email_keys(self):
         email_check = re.compile(r'(^[A-Za-z0-9_.-]{1,320})@([A-Za-z]{1,253}).([A-Za-z]*)$')
         self.driver.find_element(By.ID, "sys_user.user_name").send_keys(self.user_name)
         time.sleep(1.5)
@@ -551,28 +553,28 @@ class UserCreation:
         time.sleep(2)
 
     # fills in project ID, company name, and office ID.
-    def send_org_keys(self):
+    def __send_org_keys(self):
         if self.org == 'GS':
-            self.format_project_id()
+            self.__format_project_id()
         self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.pid)
       
         time.sleep(1.5)
 
-        self.format_office_id()
+        self.__format_office_id()
         self.driver.find_element(By.ID, "sys_user.u_office_id").send_keys(self.oid)
         
         time.sleep(1.5)
 
         self.driver.find_element(By.ID, 'sys_display.sys_user.company').send_keys(self.company)
  
-    def format_office_id(self):
+    def __format_office_id(self):
         full_oid = self.oid
         full_oid = full_oid.split("-", 1)
 
         self.oid = full_oid[0].strip()
         self.oid_location = full_oid[-1].strip()
     
-    def name_keys(self):
+    def __name_keys(self):
         name = self.name
         name = " ".join(name)
 
@@ -584,7 +586,7 @@ class UserCreation:
         # name keys will always be the first and last name, regardless of X middle names.
         return name[0], name[-1]
     
-    def format_project_id(self):
+    def __format_project_id(self):
         pid = self.pid
         # first 4 digits must be '0' / the remaining digits must be between 5 to 6 characters in length.
         pid_prefix = re.compile(r'^([0]{4})$')

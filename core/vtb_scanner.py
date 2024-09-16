@@ -1,5 +1,6 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
+from selenium.common.exceptions import NoSuchElementException
 import time
 '''
 how the VTBScanner works:
@@ -21,9 +22,29 @@ class VTBScanner():
 
     def get_to_vtb(self) -> None:
         self.driver.get(self.vtb_link)
-        time.sleep(7)
+        time.sleep(15)
 
-    def get_ritms(self) -> list:
+    def get_ritm_numbers(self) -> list:
+        self.driver.switch_to.default_content() 
+        self.driver.switch_to.frame('gsft_main')
+        
+        req_lane = '//li[@v-lane-index="0" and @h-lane-index="0"]'
+        ritm_elements = self.driver.find_elements(By.XPATH, f'{req_lane}//a[contains(text(), "RITM")]')
+
+        if len(ritm_elements) > 4:
+            ritm_elements = ritm_elements[:4]
+
+        ritm_numbers = []
+        if ritm_elements:
+            for element in ritm_elements:
+                ritm_numbers.append(element.text)
+
+        self.driver.switch_to.default_content()
+
+        return ritm_numbers
+
+
+    def get_web_elements(self) -> list:
         # NOTE: this is going to be ran indefinitely as it will be scanning the VTB for any incoming tasks.
         # xpath to the lane which contains the items to look for.
         self.driver.switch_to.frame('gsft_main')
@@ -39,16 +60,11 @@ class VTBScanner():
         if len(inc_elements) > 4:
             inc_elements = inc_elements[:4]
 
-        ritm_numbers = []
-        if ritm_elements:
-            for element in ritm_elements:
-                ritm_numbers.append(element.text)
-
         self.driver.switch_to.default_content()
         
-        return ritm_numbers, ritm_elements, inc_elements
+        return ritm_elements, inc_elements
     
-    def drag_task(self, elements, type: str):
+    def drag_task(self, elements: list, type: str):
         self.driver.switch_to.frame('gsft_main')
 
         lane = self.driver.find_element(By.XPATH, '//li[@v-lane-index="1" and @h-lane-index="0"]')
@@ -61,7 +77,6 @@ class VTBScanner():
 
         for element in elements:
             # go back to select the parent container of the web element.
-            element = element.find_element(By.XPATH, '../..')
 
             drag_task = ActionChains(self.driver).click_and_hold(element)
             time.sleep(1)

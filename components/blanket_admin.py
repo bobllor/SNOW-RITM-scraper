@@ -25,4 +25,8 @@ class AdminRights:
         }
 
     def check_blanket(self):
-        pass
+        for key, value in self.blanket_dict.items():
+            if self.company.lower() in key.lower() or self.company.lower() in value.lower():
+                return True
+
+        return False
