@@ -16,13 +16,23 @@ create the user > move task number(s) to the correct lane > repeat from beginnin
 '''
 
 class VTBScanner():
-    def __init__(self, driver, link):
+    def __init__(self, driver, link, blacklist=None):
         self.driver = driver
         self.vtb_link = link
+        self.blacklist = set() if blacklist is None else blacklist
 
+    def add_blacklist(self, item):
+        self.blacklist.add(item)
+    
+    def clear_blacklist(self):
+        self.blacklist.clear()
+    
+    def return_blacklist(self):
+        return self.blacklist
+    
     def get_to_vtb(self) -> None:
         self.driver.get(self.vtb_link)
-        time.sleep(15)
+        time.sleep(10)
 
     def get_ritm_numbers(self) -> list:
         self.driver.switch_to.default_content() 
@@ -37,12 +47,12 @@ class VTBScanner():
         ritm_numbers = []
         if ritm_elements:
             for element in ritm_elements:
-                ritm_numbers.append(element.text)
+                if element not in self.blacklist:
+                    ritm_numbers.append(element.text)
 
         self.driver.switch_to.default_content()
 
         return ritm_numbers
-
 
     def get_web_elements(self) -> list:
         # NOTE: this is going to be ran indefinitely as it will be scanning the VTB for any incoming tasks.
@@ -76,8 +86,6 @@ class VTBScanner():
             lane = inc_lane
 
         for element in elements:
-            # go back to select the parent container of the web element.
-
             drag_task = ActionChains(self.driver).click_and_hold(element)
             time.sleep(1)
             drag_task.move_to_element(lane)
