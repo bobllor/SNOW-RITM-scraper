@@ -8,25 +8,24 @@ import time, re
 
 # NOTE: still requires manual input if something goes wrong.
 class UserCreation:
-    def __init__(self, driver, link: str, user_info: list, name: list, requestor: str):
+    def __init__(self, driver, link: str, user_info: dict, name: list, requestor: str, admin=None):
         self.driver = driver
         self.link = link
         self.name = name
         self.requestor = requestor
 
         # company info, 8 instances are initialized from a list from ScrapeRITM.
-        # in order: email, employee ID, division #, company ID, company name, office ID, project ID, and organization
-        self.email = user_info[0].strip()
-        self.eid = user_info[1]
-        self.div = user_info[2]
-        self.cid = user_info[3]
-        self.company = user_info[4]
-        self.oid = user_info[5]
-        self.pid = user_info[6]
-        self.org = user_info[7]
+        # keys: email, e_id, division, c_id, company, o_id, p_id, org
+        self.email = user_info['email']
+        self.eid = user_info['e_id']
+        self.div = user_info['division']
+        self.cid = user_info['c_id']
+        self.company = user_info['company']
+        self.oid = user_info['o_id']
+        self.pid = user_info['p_id']
+        self.org = user_info['org']
 
-        # TODO: do stuff based on if the user is a blanket admin or not.
-        self.admin = AdminRights(self.company).check_blanket()
+        self.admin = AdminRights(self.company).check_blanket() if admin is None else admin
 
         # initialized in a future function call
         self.oid_location = ""
@@ -44,6 +43,8 @@ class UserCreation:
         # prevent multiple companies creation, which is either temp or permanent-
         # depending on if i want to find a solution. for now, it will raise an exception.
         self.company_created = False
+        # issue with the company field inside the creation of a new pid, this triggers a new step in the process.
+        self.pid_error = False
 
     def create_user(self):
         self.driver.get(self.link)
@@ -142,8 +143,14 @@ class UserCreation:
 
     # used for both filling and checking the user information.
     def fill_user(self):
-        # prevent an double-loop for user creation.
+        # prevent a double-loop for user creation.
         if self.loop_once is False:
+            self.driver.switch_to.default_content()
+            self.driver.switch_to.frame('gsft_main')
+            # indicate to stop this function from executing its main loop, 
+            # condition is only True if existing values of a cell are all matching.
+            stop = False
+
             keys_to_send = [self.cid, self.oid, self.oid, self.oid_location, self.div]
             user_cells_obj = []
             user_cell_xpath = '//tbody[@class="list2_body"]'
@@ -189,7 +196,7 @@ class UserCreation:
                 
                 if match_count == 6:
                     print('   No values need to be updated.')
-                    return
+                    stop = True
 
                 for index in sorted(index_remover, reverse=True):
                     del elements_obj[index]
@@ -205,13 +212,13 @@ class UserCreation:
                 # only applicable if this is not an existing user.
                 del keys_to_send[2]
                 del elements_obj[2]
-
+            
             print("\n   Inserting in consultant values...")
             time.sleep(3)
 
             count = 0
             repeat_attempts = 0
-            while count < len(keys_to_send) and repeat_attempts != 3:
+            while count < len(keys_to_send) and repeat_attempts != 3 and not stop:
                 # try block is used to keep trying in case an error occurs 
                 # during the attempt to fill a status cell in, max 3 repeats.
                 try:
@@ -251,12 +258,32 @@ class UserCreation:
                     repeat_attempts += 1
                     print(f'   Failed inserting {keys_to_send[count]}. Attempting to fill again.')
                     time.sleep(1)
+                
+            # initialized by the constructor, checks if the company is a blanket admin.
+            # NOTE: this does not check for manually approved ones. it will maybe be implemented.
+            if self.admin:
+                admin_cell = self.driver.find_element(By.XPATH, f'{user_cell_xpath}//td[12]')
+                admin_cell_val = admin_cell.text
+
+                if admin_cell_val != 'true':
+                    ActionChains(self.driver).double_click(admin_cell).perform()
+                    time.sleep(1.5)
+
+                    admin_cell_edit = self.driver.find_element(By.XPATH, '//select[@class="form-control list-edit-input"]')
+                    ActionChains(self.driver).click(admin_cell_edit).perform()
+                    time.sleep(.5)
+                    ActionChains(self.driver).send_keys(Keys.ARROW_UP).perform()
+                    time.sleep(.5)
+                    ActionChains(self.driver).send_keys(Keys.ENTER).send_keys(Keys.ENTER).perform()
+                    time.sleep(.5)
             
             if repeat_attempts != 3:
                 print("   User filling completed.")
             else:
                 # TODO: use an actual exception here, maybe a custom one?
                 raise NoSuchElementException
+        
+            self.driver.switch_to.default_content()
 
     def user_error_msg_check(self):
         '''
@@ -366,13 +393,12 @@ class UserCreation:
         company_search_button.send_keys(Keys.ENTER)
         time.sleep(3)
 
-
-        company_list = self.driver.find_elements(By.XPATH, f'{company_table}{company_name}[contains(text(), "{self.company}")]')
+        company_list = self.driver.find_elements(By.XPATH, f'{company_table}{company_name}')
 
         # look for the exact match of company name and element value.
         if company_list:
             for company_name in company_list:
-                if self.company.lower() in company_name.text.lower():
+                if self.company.lower() == company_name.text.lower() or self.company.lower() in company_name.text.lower():
                     found = True
                     company_name.click()
                     time.sleep(1.5)
@@ -454,20 +480,30 @@ class UserCreation:
         if project_list == [] or found is False:
             new_button = self.driver.find_element(By.XPATH, '//button[@value="sysverb_new"]')
             new_button.click()
-            time.sleep(3)
+            time.sleep(1.5)
 
+            # pid field.
             pid_field = self.driver.find_element(By.XPATH, '//input[@id="u_projects.u_project_number"]')
             pid_field.send_keys(self.pid)
-            time.sleep(1)
+            time.sleep(.5)
 
             # primary point of contact- the requestor.
             ppoc_field = self.driver.find_element(By.XPATH, '//input[@id="sys_display.u_projects.u_primary_poc"]')
             ppoc_field.send_keys(self.requestor)
-            time.sleep(1)
+            time.sleep(.5)
 
+            # company field, if pid_error is true then the steps to create the pid is changed.
             company_field = self.driver.find_element(By.XPATH, '//input[@id="sys_display.u_projects.u_company"]')
-            company_field.send_keys(self.company)
-            time.sleep(1)
+            if not self.pid_error:
+                company_field.send_keys(self.company)
+                time.sleep(.5)
+            else:
+                company_field.send_keys(self.company)
+                time.sleep(.5)
+                company_field.click()
+                time.sleep(.5)
+                ActionChains(self.driver).send_keys(Keys.ARROW_DOWN).send_keys(Keys.ENTER).perform()
+                time.sleep(.5)
 
             allocation_field_xpath = '//select[@id="u_projects.u_allocation"]'
             if self.org == 'GS':
@@ -495,6 +531,13 @@ class UserCreation:
             save_btn = self.driver.find_element(By.XPATH, '//button[@value="sysverb_insert_and_stay"]')
             save_btn.click()
             time.sleep(2)
+
+            # company name errors can occur when creating a new project ID.
+            # if the error appears, then redo the process but with an additional step.
+            invalid_company = 'Invalid update'
+            error_element = self.driver.find_elements(By.XPATH, f'//div[contains(text(), "{invalid_company}")]')
+            if error_element:
+                self.pid_error = True
 
             self.driver.close()
             time.sleep(1)
@@ -617,7 +660,6 @@ class UserCreation:
                 self.pid = pid
             else:
                 # TODO: ADD A CUSTOM EXCEPTION.
-                # TODO: FIX AN ISSUE WITH LONG PROJECT IDs (specifically 5 zeroes + 6 digits)
                 raise NoSuchElementException
         else:
         # counts how many 0s are in the beginning, when a different character is read, break out the loop.
