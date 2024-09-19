@@ -34,7 +34,7 @@ def create_user(scraper: ScrapeRITM, links: Links):
     print(f'\t   Need by: {need_by}')
 
 if __name__ == '__main__':
-    clear = lambda: os.system('cls')
+    clear = lambda: os.system('cls') if os.name == 'nt' else 'clear'
     options = Options()
     options.add_experimental_option("detach", True)
 
