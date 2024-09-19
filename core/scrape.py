@@ -131,7 +131,7 @@ class ScrapeRITM:
 
     def scrape_requestor(self) -> str:
         self.driver.find_element(By.XPATH, '//button[@name="viewr.sc_req_item.request.requested_for"]').click()
-        time.sleep(1)
+        time.sleep(2.5)
         req_element = self.driver.find_element(By.XPATH, '//input[@id="sys_readonly.sys_user.user_name"]')
 
         return req_element.get_attribute("value")
@@ -166,11 +166,12 @@ class ScrapeRITM:
         
         return requested_item, items
     
-    def scrape_user_info(self):
+    # returns keys: email, e_id, division, c_id, company, o_id, p_id, org
+    def scrape_user_info(self) -> dict:
         # list for these pieces of shit, they change the xpaths of normal builds.
         allegis_list = ["Aerotek", "Aston Carter", "Actalent"]
 
-        user_info = []
+        temp = {}
 
         # organization container, contains global services, staffing, or allegis orgs
         org_xpath = '//option[contains(@selected, "SELECTED")]'
@@ -190,17 +191,22 @@ class ScrapeRITM:
         if self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value") in customer_id_values:
             cid_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
         company_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
+        # what if a new customer puts the cid in the company name field instead?
+        # this takes into account of idiots like JW who puts in the wrong input in the field.
+        if self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{company_xpath}').get_attribute('value').isdigit():
+            company_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
+            cid_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
 
         email_xpath = '//tr[3]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
         eid_xpath = '//tr[4]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
 
         # consultant container, contains employee ID and email address
-        consultant_xpaths = [email_xpath, eid_xpath]
-        for xpath in consultant_xpaths:
+        consultant_xpaths = [('email', email_xpath), ('e_id', eid_xpath)]
+        for key, xpath in consultant_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, f"{self.consultant_info_xpath}{xpath}")
             part = element_xpath.get_attribute("value")
 
-            user_info.append(part)
+            temp[key] = part
         
         div_xpath = '//table[@class="container_table"]/tbody/tr[2]//option[@selected="SELECTED"]'
         div_value = self.driver.find_element(By.XPATH, f'{self.consultant_info_xpath}{div_xpath}').get_attribute("value")
@@ -209,45 +215,43 @@ class ScrapeRITM:
         if div_value == '':
             div_xpath = '//table[@class="container_table"]/tbody/tr[1]//option[@selected="SELECTED"]'
             div_value = self.driver.find_element(By.XPATH, f'{self.consultant_info_xpath}{div_xpath}').get_attribute("value")
-        user_info.append(div_value)
+        temp['division'] = div_value
 
         # company container, contains company information (customer ID, company name, office ID)
-        company_xpaths = [cid_xpath, company_xpath, oid_xpath]
-    
+        company_xpaths = [('c_id', cid_xpath), ('company', company_xpath), ('o_id', oid_xpath)]
         # append project ID if xpath if org is GS, other orgs removes the project ID field.
         if org == 'GS':
             pid_xpath = '//tr[7]//input[@class="cat_item_option sc-content-pad form-control"]'
-            company_xpaths.append(pid_xpath)
+            company_xpaths.append(('p_id', pid_xpath))
         
-        for xpath in company_xpaths:
+        for key, xpath in company_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{xpath}")
             part = element_xpath.get_attribute("value")
-            user_info.append(part.strip())
+            temp[key] = part.strip()
         
         # Not Listed creates two new fields for the office ID and location/name. 
-        if 'Not Listed' in user_info[5]:
+        # user_info[5] is oid.
+        if 'Not Listed' in self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{oid_xpath}').get_attribute('value'):
             oid_xpath = '//tr[25]//input[@class="cat_item_option sc-content-pad form-control"]'
             olocation_xpath = '//tr[26]//input[@class="cat_item_option sc-content-pad form-control"]'
 
             oid = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{oid_xpath}').get_attribute('value')
             olocation = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{olocation_xpath}').get_attribute('value')
 
-            user_info[5] = f'{oid} - {olocation}'
+            temp['oid'] = f'{oid} - {olocation}'
 
         # changes the project ID if org is not GS
         if org in allegis_list:
             if org == "Actalent":
                 org = "ACTALENT"
             # modifies division, company, PID
-            user_info[2] = org
-            user_info[4] = org
-            user_info.append(org)
-        if org == 'Staffing':
-            user_info.append('TEKSTAFFING')
-        
-        # append organzation last to the list
-        user_info.append(org)
+            temp['division'] = org
+            temp['company'] = org
+            temp['p_id'] = org
+        elif org == 'Staffing':
+            temp['p_id'] = 'TEKSTAFFING'
+
+        temp['org'] = org
         
         # NOTE: bad employee IDs gets converted to TBD in class UserCreation.
-        # returns: email, employee ID, division, customer ID, company, office ID, project ID, and organization
-        return user_info
+        return temp
