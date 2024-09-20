@@ -522,7 +522,7 @@ class UserCreation:
                 allocation_select = self.driver.find_element(By.XPATH, f'{allocation_field_xpath}/option[@value="Staffing"]')
             allocation_select.click()
             time.sleep(2)
-
+            
             div_field = self.driver.find_element(By.XPATH, '//input[@id="u_projects.u_division"]')
             div_field.send_keys(self.div)
             time.sleep(1)
