@@ -13,4 +13,4 @@ def logger(exception_msg):
                         format='%(asctime)s | %(name)s: %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
     
-    logging.critical(exception_msg)
+    logging.critical(exception_msg + '\n')
