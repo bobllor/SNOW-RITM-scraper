@@ -16,7 +16,7 @@ class UserCreation:
 
         # company info, 8 instances are initialized from a list from ScrapeRITM.
         # keys: email, e_id, division, c_id, company, o_id, p_id, org
-        self.email = user_info['email']
+        self.email = user_info['email'].strip()
         self.eid = user_info['e_id']
         self.div = user_info['division']
         self.cid = user_info['c_id']
@@ -45,6 +45,10 @@ class UserCreation:
         self.company_created = False
         # issue with the company field inside the creation of a new pid, this triggers a new step in the process.
         self.pid_error = False
+        # used to prevent an infinite loop inside the new user creation. if two errors show up at the same time,
+        # the error message at the top of the page will not go away and cause an infinite loop.
+        # when > 3, an exception will be thrown and blacklist the RITM.
+        self.error_counter = 0
 
     def create_user(self):
         self.driver.get(self.link)
@@ -141,7 +145,7 @@ class UserCreation:
             time.sleep(1)
             print("   User search completed.")
 
-    # used for both filling and checking the user information.
+    # used for both filling and checking the user information.        
     def fill_user(self):
         # prevent a double-loop for user creation.
         if self.loop_once is False:
@@ -213,8 +217,9 @@ class UserCreation:
                 del keys_to_send[2]
                 del elements_obj[2]
             
-            print("\n   Inserting in consultant values...")
-            time.sleep(3)
+            if not stop:
+                print("\n   Inserting in consultant values...")
+                time.sleep(3)
 
             count = 0
             repeat_attempts = 0
@@ -297,6 +302,10 @@ class UserCreation:
                       'Invalid email address',
                       'Invalid update']
         errors = []
+
+        if self.error_counter > 3:
+            # TODO: make a custom exception for this!
+            raise NoSuchElementException
         
         # search for if the error exists
         for error in error_list:
@@ -311,6 +320,7 @@ class UserCreation:
                 errors.append(error_msg)
                 break
         
+        self.error_counter += 1
         return errors
 
     # DUPLICATE KEY ERROR, compares the existing user with the info inside the RITM ticket.
@@ -579,9 +589,8 @@ class UserCreation:
     
     # fills in username (first.last@teksystemsgs.com), and their personal email.
     def __send_email_keys(self):
-        email_check = re.compile(r'(^[A-Za-z0-9_.-]{1,320})@([A-Za-z]{1,253}).([A-Za-z]*)$')
         self.driver.find_element(By.ID, "sys_user.user_name").send_keys(self.user_name)
-        time.sleep(1)
+        time.sleep(.5)
         
         # mutable variables in case of a bad email input.
         email_key = self.email
@@ -590,16 +599,11 @@ class UserCreation:
         if self.email.upper() == 'TBD' or self.email == '':
             email_key = self.user_name
             personal_key = ''
-        
-        # used for very bad email addresses.
-        if email_check.match(self.email) is None:
-            email_key = self.user_name
-            personal_key = ''
 
         self.driver.find_element(By.ID, "sys_user.email").send_keys(email_key)
-        time.sleep(1)
+        time.sleep(.5)
         self.driver.find_element(By.ID, "sys_user.u_personal_e_mail").send_keys(personal_key)
-        time.sleep(1)
+        time.sleep(.5)
 
     # fills in project ID, company name, and office ID.
     def __send_org_keys(self):
@@ -607,16 +611,17 @@ class UserCreation:
             self.__format_project_id()
         self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.pid)
       
-        time.sleep(1)
+        time.sleep(.5)
 
         self.__format_office_id()
         self.driver.find_element(By.ID, "sys_user.u_office_id").send_keys(self.oid)
         
-        time.sleep(1)
+        time.sleep(.5)
 
         self.driver.find_element(By.ID, 'sys_display.sys_user.company').send_keys(self.company)
  
     def __format_office_id(self):
+        # separates the office ID and office location from the single string.
         full_oid = self.oid
         full_oid = full_oid.split("-", 1)
 
