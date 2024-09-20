@@ -12,8 +12,6 @@ from selenium.common.exceptions import ElementClickInterceptedException
 import os, time, traceback
 from log import logger
 
-# TODO: properly scan custom hardware orders.
-
 def create_user(scraper: ScrapeRITM, links: Links):
     print("\n   Obtaining information for user creation...")
     name = scraper.scrape_name()
@@ -47,59 +45,69 @@ if __name__ == '__main__':
     login.login_sn()
     clear()
 
-    # used to break out of the loop, this is a temp variable while i work out the stuff.
+    # NOTE: this is a temp variable while i work out the stuff.
     stop = 0
-    
-    clear()
-    found = True
 
-    # used for when an exception occurs, that RITM will not be accessed again (until the bug fix is found).
-    # the program will function as normal, but ignored RITMs will have to be manually done.
+    # if a RITM is added to the blacklist, the program will not use the RITM number if it is present on the board.
+    # blacklisted RITMs will remain in the Request lane (assuming it hasn't moved), which requires manual interaction.
+    # blacklisted RITMs only occur if an exception is raised.
     blacklisted_ritms = set()
 
     while stop < 50:
-        print('\n   Getting to the Visual Task Board...')
-        scanner = VTBScanner(driver, links.vtb)
+        if driver.current_url != links.vtb:
+            print('\n   Getting to the Visual Task Board...')
+        scanner = VTBScanner(driver, links.vtb, blacklisted_ritms)
 
         # used to open the VTB link, initialized to True to start the process.
         print('\n   Scanning the VTB for tasks...')
         time.sleep(2)
 
-        if found is True:
-            # the driver will stay on the VTB if found is false- used for exceptions or if there are no tasks.
-            found = False
+        # ensures that if there are no 
+        if driver.current_url != links.vtb:
             scanner.get_to_vtb()
-        ritm_list = scanner.get_ritm_numbers()
+        ritm = scanner.get_ritm_number()
+
+        # used to repeat the user creating process, if > 3 then the RITM will be added to the blacklist.
+        # NOTE: this is only true to 2nd except block, if an exception is raised for the 1st except block
+        # then it will blacklist it immediately and exit out of the loop regardless of the attempts count.
+        attempts = 0
         
-        try:
-            if ritm_list:
-                found = True
-                # holds the current RITM of the loop, if an exception occurs this variable is used for a blacklist.
-                current_ritm = ''
-                # NOTE: this is done in batches of four, any more than that the program breaks.
-                for ritm in ritm_list:
-                    current_ritm = ritm
-                    print(f"\n   Searching for {ritm}...")
-                    scraper = ScrapeRITM(driver, ritm)
-                    scraper.search_ritm()
+        while ritm:
+            try:
+                print(f"\n   Searching for {ritm}...")
+                scraper = ScrapeRITM(driver, ritm)
+                scraper.search_ritm()
 
-                    create_user(scraper, links)
+                create_user(scraper, links)
                 
+                # going back to the vtb should always occur after creating a user.
                 scanner.get_to_vtb()
-                ritm_elements, inc_elements = scanner.get_web_elements()
-                scanner.drag_task(ritm_elements, 'RITM')
-            else:
-                print('\n   No tasks were found.')
-                print('   Please wait 2 minutes for the next scan.')
-                misc.timing.timer()
-            
-        except (NoSuchElementException, NoSuchFrameException):
-            print('\n   CRITICAL ERROR: Something went wrong during the process. The error has been logged.')
-            blacklisted_ritms.add(current_ritm)
-            logger(traceback.format_exc())
-        except ElementClickInterceptedException:
-            print('\n   ERROR: Something went wrong during the process. Trying again.')
 
+                ritm_element = scanner.get_ritm_element(ritm)
+                if ritm_element:
+                    scanner.drag_task(ritm_element, 'RITM')
+
+                break                
+            except (NoSuchElementException, NoSuchFrameException):
+                print('\n   CRITICAL ERROR: Something went wrong during the process. The error has been logged.')
+                blacklisted_ritms.add(ritm)
+                logger(traceback.format_exc())
+                break
+            except ElementClickInterceptedException:
+                print('\n   ERROR: Something went wrong during the process. Trying again.')
+                if attempts > 3:
+                    blacklisted_ritms.add(ritm)
+                    break
+                attempts += 1
+        else:
+            print('\n   No tasks were found.')
+            print('   Please wait 2 minutes for the next scan.')
+            misc.timing.timer()
+
+        inc_element = scanner.get_inc_element()
+        if inc_element:
+            scanner.drag_task(inc_element, 'INC')
+        
         stop += 1
 
         # if the list is greater than X, then reset it back 0.
