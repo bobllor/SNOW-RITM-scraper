@@ -8,6 +8,13 @@ import time, re
 
 # NOTE: still requires manual input if something goes wrong.
 class UserCreation:
+    '''
+    Create the user and add them into the Service NOW database.
+
+    Checks and handles for any errors that can occur during the process.
+
+    If 3 exceptions are raised during the process, then it will be canceled and the RITM will be blacklisted.
+    '''
     def __init__(self, driver, link: str, user_info: dict, name: list, requestor: str, admin=None):
         self.driver = driver
         self.link = link
@@ -51,6 +58,9 @@ class UserCreation:
         self.error_counter = 0
 
     def create_user(self):
+        '''
+        Create the user into Service NOW's database.
+        '''
         self.driver.get(self.link)
 
         time.sleep(3)
@@ -80,6 +90,13 @@ class UserCreation:
         self.driver.switch_to.default_content()
     
     def save_user(self) -> bool:
+        '''
+        Saves the user on the user creation page.
+
+        This checks for any errors that pop up during the user creation process.
+
+        Uses a class method to obtain the list of errors to check.
+        '''
         self.driver.switch_to.default_content()
         self.driver.switch_to.frame('gsft_main')
         save_btn_xpath = '//button[@id="sysverb_insert_and_stay"]'
@@ -123,7 +140,12 @@ class UserCreation:
 
         return True
 
-    def search_user_list(self, time_to_wait):
+    def search_user_list(self, time_to_wait: int):
+        '''
+        Search for the user using their unique username.
+
+        Takes an int as a parameter for how much time to wait.
+        '''
         if self.loop_once is False:
             user_link = 'https://tek.service-now.com/nav_to.do?uri=%2Fsys_user_list.do%3Fsysparm_clear_stack%3Dtrue%26sysparm_userpref_module%3D62354a4fc0a801941509bc63f8c4b979'
 
@@ -147,6 +169,11 @@ class UserCreation:
 
     # used for both filling and checking the user information.        
     def fill_user(self):
+        '''
+        Fills in the user cells after searching up the user in the database.
+
+        If any exception is raised during the process, it will attempt the process 3 times before blacklisting the RITM.
+        '''
         # prevent a double-loop for user creation.
         if self.loop_once is False:
             self.driver.switch_to.default_content()
@@ -284,18 +311,21 @@ class UserCreation:
             
             if repeat_attempts != 3:
                 print("   User filling completed.")
+                self.loop_once = True
             else:
-                # TODO: use an actual exception here, maybe a custom one?
+                # TODO: create a custom exception here.
                 raise NoSuchElementException
         
             self.driver.switch_to.default_content()
 
     def user_error_msg_check(self):
         '''
-        following mandatory fields: bad company name, either it does not exist or SNOW is being bad.
-        unique key violation: a user already exists with the username.
-        invalid email: bad email, not sure why this happens.
-        invalid update: bad project ID, either it does not exist or SNOW is being bad.
+        Looks for any error messages that pop up due to a bad input when creating the user.
+
+        Following mandatory fields: bad company name, either it does not exist or SNOW is being bad.
+        Unique key violation: a user already exists with the username.
+        Invalid email: bad email, not sure why this happens.
+        Invalid update: bad project ID, either it does not exist or SNOW is being bad.
         '''
         error_list = ['The following mandatory fields are not filled in: Company',
                       'Unique Key violation detected by database',
@@ -323,9 +353,21 @@ class UserCreation:
         self.error_counter += 1
         return errors
 
-    # DUPLICATE KEY ERROR, compares the existing user with the info inside the RITM ticket.
     # NOTE: don't bother refactoring this.
     def error_duplicate_key(self):
+        '''
+        Unique key violation, this error is a warning that a user already exists with the current username.
+
+        This checks if either the personal email address or employee ID matches with the existing user.
+
+        If a match is found, then the class method to fill the user cells is called and will update the user.
+        This also will update the class attribute existing_user to True, which indicates that this instance is an 
+        existing user and will not execute certain steps regarding user creation.
+
+        If no matches are found, then a number (n + 1) is attached to the end of the username (before the @) to
+        distinguish the new user from the existing user(s).
+        The number is incremented by 1 depending on how many unique users exist.
+        '''
         self.search_user_list(5)
         
         # bool to check if the items matches
@@ -370,8 +412,20 @@ class UserCreation:
             self.user_name_unique_id += 1
             self.create_user()
 
-    # INVALID COMPANY/COMPANY DOESN'T EXIST, select the company from the list or create a new one.
     def error_invalid_company(self):
+        '''
+        Invalid company error that occurs during the user creation process.
+
+        There are two reasons why this issue occurs:
+            1. The company name does not exist inside the database.
+            2. There is some issue with the autofilling of the company name.
+        
+        In any case, the list of company names is opened and a matching name will be selected
+        if it is matching- otherwise select any company that at least contains the company name.
+
+        If the company name does not exist, then a new company name will be created, then the same method
+        is called to repeat the process.
+        '''
         default_window = self.driver.current_window_handle
 
         time.sleep(2)
@@ -446,6 +500,23 @@ class UserCreation:
     
     # INVALID PROJECT ID, select the project ID from the list or create a new one.
     def error_project_id(self):
+        '''
+        Invalid project ID error that occurs during the user creation process.
+
+        There are three reasons why this issue occurs:
+            1. The project ID does not exist inside the database.
+            2. There is some issue with the autofilling of the project ID.
+
+        Incorrect project IDs are corrected using a class method. If the project ID is very bad, as in the length
+        of the ID is over 11 or if there is no project ID, then an exception is raised and the RITM is blacklisted.
+        
+        In any case, the list of project IDs is opened and a matching ID will be selected if it is an exact match.
+
+        If the project ID does not exist, then a new project ID will be created. This process requires additional
+        steps, which requires 6 inputs: project ID, requestor, date created, company name, division, and allocation.
+        
+        Afterwards, the same method will be called to select the correct project ID.
+        '''
         default_window = self.driver.current_window_handle
 
         time.sleep(2)
@@ -556,8 +627,14 @@ class UserCreation:
 
             self.error_project_id()
     
-    # INVALID EMAIL ERROR, replaces email address with username instead.
     def error_invalid_email(self):
+        '''
+        Bad email address error during the user creation process.
+
+        This will occur due to a bad input from the requestor inside the RITM ticket.
+
+        If this is detected, then the user's unique username is used instead.
+        '''
         # change the user's email to the username instead.
         self.email = self.user_name
 
@@ -571,8 +648,10 @@ class UserCreation:
 
         self.save_user()
     
-    # fills in consultant first name, last name, and their employee ID.
     def __send_consultant_keys(self):
+        '''
+        Fills in the first name, last name, and employee ID to the fields during user creation.
+        '''
         self.driver.find_element(By.ID, "sys_user.first_name").send_keys(self.name[0])
         time.sleep(1)
         self.driver.find_element(By.ID, "sys_user.last_name").send_keys(self.name[1])
@@ -589,6 +668,13 @@ class UserCreation:
     
     # fills in username (first.last@teksystemsgs.com), and their personal email.
     def __send_email_keys(self):
+        '''
+        Fills in the username (first.last@teksystemsgs.com) and the personal email address 
+        to the fields during user creation.
+
+        In case of a bad email input, such as TBD or an empty input, then the username is used
+        in place of the personal email address.
+        '''
         self.driver.find_element(By.ID, "sys_user.user_name").send_keys(self.user_name)
         time.sleep(.5)
         
@@ -596,7 +682,7 @@ class UserCreation:
         email_key = self.email
         personal_key = self.email
         
-        if self.email.upper() == 'TBD' or self.email == '':
+        if self.email.upper() == 'TBD' or self.email == '' or '@' not in self.email:
             email_key = self.user_name
             personal_key = ''
 
@@ -605,8 +691,16 @@ class UserCreation:
         self.driver.find_element(By.ID, "sys_user.u_personal_e_mail").send_keys(personal_key)
         time.sleep(.5)
 
-    # fills in project ID, company name, and office ID.
     def __send_org_keys(self):
+        '''
+        Fills in the project ID, office ID, and company name to the fields during user creation.
+
+        The project ID is checked and fixed depending on certain conditions. If the project ID is critically bad,
+        such as the total length > 11 or there is no project ID, then the RITM is blacklisted.
+
+        The office ID is formatted here using a class method, which also initializes two different attributes
+        office ID and office location since the input will always contain "00000 - Dallas, Texas".
+        '''
         if self.org == 'GS':
             self.__format_project_id()
         self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.pid)
@@ -621,6 +715,11 @@ class UserCreation:
         self.driver.find_element(By.ID, 'sys_display.sys_user.company').send_keys(self.company)
  
     def __format_office_id(self):
+        '''
+        Formats the office ID by splitting the "-" inside the original office ID string.
+
+        Initializes two attributes, office ID and office location.
+        '''
         # separates the office ID and office location from the single string.
         full_oid = self.oid
         full_oid = full_oid.split("-", 1)
@@ -629,6 +728,12 @@ class UserCreation:
         self.oid_location = full_oid[-1].strip()
     
     def __name_keys(self):
+        '''
+        Method used to ensure the first and last name will always be the first and last name
+        if the user contains multiple names (i.e. John Doe Smith).
+
+        Dashes ("-") are accounted for any removed to properly parse the name.
+        '''
         name = self.name
         name = " ".join(name)
 
@@ -641,6 +746,13 @@ class UserCreation:
         return name[0], name[-1]
     
     def __format_project_id(self):
+        '''
+        Checks the project ID and converts it to the correct format.
+
+        Project IDs must be 10-11 characters long and must contain four 0s at the front of the project ID.
+
+        In case of very bad errors, such as length > 11 or no project ID, then the RITM will be blacklisted.
+        '''
         pid = self.pid
         # first 4 digits must be '0' / the remaining digits must be between 5 to 6 characters in length.
         pid_prefix = re.compile(r'^([0]{4})$')

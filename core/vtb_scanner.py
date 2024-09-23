@@ -31,6 +31,20 @@ class VTBScanner():
         '''
         self.driver.get(self.vtb_link)
 
+    def __switch_frames(self):
+        '''
+        Switch iframes when going back to or currently on the VTB.
+        '''
+        self.driver.switch_to.default_content()
+        try:
+            WebDriverWait(self.driver, 15).until(
+                EC.frame_to_be_available_and_switch_to_it(self.driver.find_element(By.XPATH, '//iframe[@id="gsft_main"]'))
+            )
+        except TimeoutException:
+            # TODO: create a logging message here.
+            print('   Something went wrong during the switching to the VTB frame.')
+            pass
+
     def get_ritm_number(self):
         '''
         Scans the request lane for a RITM number.
@@ -39,11 +53,7 @@ class VTBScanner():
 
         It only returns a single RITM number. If the list is empty, then None is returned.
         '''
-        self.driver.switch_to.default_content()
-        self.driver.switch_to.default_content()
-        WebDriverWait(self.driver, 15).until(
-            EC.frame_to_be_available_and_switch_to_it('gsft_main')
-        )
+        self.__switch_frames()
 
         ritm = None
         try:
@@ -71,10 +81,7 @@ class VTBScanner():
         '''
         # NOTE: this is going to be ran indefinitely as it will be scanning the VTB for any incoming tasks.
         # xpath to the lane which contains the items to look for.
-        self.driver.switch_to.default_content()
-        WebDriverWait(self.driver, 15).until(
-            EC.frame_to_be_available_and_switch_to_it('gsft_main')
-        )
+        self.__switch_frames()
         
         try:
             ritm_elements = WebDriverWait(self.driver, 15).until(
@@ -94,10 +101,7 @@ class VTBScanner():
 
         If an INC element is not found, it returns None.
         '''
-        self.driver.switch_to.default_content()
-        WebDriverWait(self.driver, 15).until(
-            EC.frame_to_be_available_and_switch_to_it('gsft_main')
-        )
+        self.__switch_frames()
 
         try:
             inc_elements = WebDriverWait(self.driver, 15).until(
@@ -117,8 +121,7 @@ class VTBScanner():
 
         Most RITMs will get dragged over to the User Created lane, some may be in the Software row instead.
         '''
-        self.driver.switch_to.default_content()
-        self.driver.switch_to.frame('gsft_main')
+        self.__switch_frames()
 
         lane = self.driver.find_element(By.XPATH, '//li[@v-lane-index="1" and @h-lane-index="0"]')
 

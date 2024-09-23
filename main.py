@@ -1,5 +1,6 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.keys import Keys
 from core.login import Login
 from core.scrape import ScrapeRITM
 from core.create_user import UserCreation
@@ -47,7 +48,7 @@ if __name__ == '__main__':
 
     # NOTE: this is a temp variable while i work out the stuff.
     stop = 0
-
+    
     # if a RITM is added to the blacklist, the program will not use the RITM number if it is present on the board.
     # blacklisted RITMs will remain in the Request lane (assuming it hasn't moved), which requires manual interaction.
     # blacklisted RITMs only occur if an exception is raised.
@@ -62,9 +63,12 @@ if __name__ == '__main__':
         print('\n   Scanning the VTB for tasks...')
         time.sleep(2)
 
-        # ensures that if there are no 
         if driver.current_url != links.vtb:
             scanner.get_to_vtb()
+        else:
+            # if the driver is on the VTB, refresh periodically in case tasks do not show up (due to SNOW).
+            driver.send_keys(Keys.F5)
+        # inside this class method contains code that skips over blacklisted RITMs.
         ritm = scanner.get_ritm_number()
 
         # used to repeat the user creating process, if > 3 then the RITM will be added to the blacklist.
@@ -105,7 +109,7 @@ if __name__ == '__main__':
             misc.timing.timer()
 
         inc_element = scanner.get_inc_element()
-        if inc_element:
+        if inc_element and inc_element not in blacklisted_ritms:
             scanner.drag_task(inc_element, 'INC')
         
         stop += 1
