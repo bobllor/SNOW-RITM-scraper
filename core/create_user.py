@@ -1,8 +1,9 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from components.blanket_admin import AdminRights
 import time, re
 
@@ -56,6 +57,18 @@ class UserCreation:
         # the error message at the top of the page will not go away and cause an infinite loop.
         # when > 3, an exception will be thrown and blacklist the RITM.
         self.error_counter = 0
+
+    def __switch_frames(self):
+        self.driver.switch_to.default_content()
+        try:
+            WebDriverWait(self.driver, 15).until(
+                EC.frame_to_be_available_and_switch_to_it(self.driver.find_element(By.XPATH, '//iframe[@id="gsft_main"]'))
+            )
+        except TimeoutException:
+            # TODO: create a logging message here.
+            print('   Something went wrong during the switching to the VTB frame.')
+            raise TimeoutException
+
 
     def create_user(self):
         '''
@@ -152,8 +165,7 @@ class UserCreation:
             print("\n   Searching for user...")
             
             self.driver.get(user_link)
-            time.sleep(5)
-            self.driver.switch_to.frame("gsft_main")
+            self.__switch_frames()
 
             search = '//input[@type="search"]'
 
@@ -161,7 +173,7 @@ class UserCreation:
             time.sleep(time_to_wait)
             user_search = self.driver.find_element(By.XPATH, search)
             user_search.send_keys(self.user_name)
-            time.sleep(3)
+            time.sleep(1)
             user_search.send_keys(Keys.ENTER)
 
             time.sleep(1)
@@ -237,7 +249,8 @@ class UserCreation:
                     # changes the xpath "//td[5]" to the name cell "//td[4]".
                     # this is done to work around the href link found in "//td[5]"- check the while loop below.
                     if elements_obj[0] == pid_cell_element:
-                        elements_obj[0] = self.driver.find_element(By.XPATH, f'{user_cell_xpath}//td[4]')
+                        pid_cell_element = self.driver.find_element(By.XPATH, f'{user_cell_xpath}//td[4]')
+                        elements_obj[0] = pid_cell_element
             else:
                 # remove oid/3rd element as it is filled during the user creation.
                 # only applicable if this is not an existing user.
@@ -381,11 +394,28 @@ class UserCreation:
         email_texts = [email_xpath.text, personal_email_xpath.text]
         print('\n   Comparing information of the existing user and the ticket.\n')
 
+        count = 0
         if self.eid != 'TBD':
-            if eid_xpath.text == self.eid or eid_xpath.text[0:-1] == self.eid:
+            if eid_xpath.text == self.eid or eid_xpath.text[0:-2] == self.eid or eid_xpath.text[1:] == self.eid:
                 eid_check = True
                 print(f'   Employee ID matched! {self.eid}')
-                time.sleep(2)
+                time.sleep(1)
+            else:
+                # count each matching number for the employee IDs. if count is at least len(id) - 1, then it is true.
+                # this is because requestors are fucking stupid and forget a single number.
+                print(eid_xpath.text)
+                print(self.eid)
+                for char in eid_xpath.text:
+                    for c in self.eid:
+                        if char == c:
+                            count += 1
+                        else:
+                            continue
+                
+                if count == len(eid_xpath.text) or count == len(eid_xpath.text) - 1:
+                    eid_check = True
+                    print(f'   Employee ID matched! {self.eid}')
+                    time.sleep(1)
         
         # takes into account of if the CSA is stupid and puts down
         # the consultant's username instead of the personal email.
