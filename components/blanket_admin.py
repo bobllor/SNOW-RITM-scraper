@@ -12,7 +12,7 @@ class AdminRights:
         # dictionary of blanket admins.
         self.blanket_dict = {
             'Altice': 'Altice',
-            'American Airlines': 'AA',
+            'American Airlines': 'American Airlines',
             'Apple': 'Apple',
             'Church Mutual': 'Church Mutual',
             'Church of Christ': 'Church of Christ',
@@ -26,7 +26,7 @@ class AdminRights:
 
     def check_blanket(self):
         for key, value in self.blanket_dict.items():
-            if self.company.lower() in key.lower() or self.company.lower() in value.lower():
+            if key.lower() in self.company.lower() or value.lower() in self.company.lower():
                 return True
 
         return False
