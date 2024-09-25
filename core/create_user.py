@@ -269,7 +269,7 @@ class UserCreation:
                 try:
                     print(f'   Inserting {keys_to_send[count]}...')
                     # used only for duplicate users due to changing the PID cell.
-                    if elements_obj[0] == pid_cell_element:
+                    if elements_obj[count] == pid_cell_element:
                         ActionChains(self.driver).click(elements_obj[count]).perform()
                         time.sleep(.5)
                         ActionChains(self.driver).send_keys(Keys.ARROW_RIGHT).perform()
