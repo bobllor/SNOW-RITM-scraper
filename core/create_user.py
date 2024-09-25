@@ -69,15 +69,12 @@ class UserCreation:
             print('   Something went wrong during the switching to the VTB frame.')
             raise TimeoutException
 
-
     def create_user(self):
         '''
         Create the user into Service NOW's database.
         '''
         self.driver.get(self.link)
-
         time.sleep(3)
-
         self.driver.switch_to.frame("gsft_main")
 
         self.__send_consultant_keys()
@@ -92,8 +89,12 @@ class UserCreation:
 
         self.__send_org_keys()
 
+        self.driver.find_element(By.XPATH, '//input[@id="sys_user.first_name"]').click()
+
+        time.sleep(2)
+
         errors = self.save_user()
-        if errors is False and self.existing_user is False:
+        if not errors and not self.existing_user:
             self.search_user_list(15)
             self.fill_user()
             print("\n   User created. Please check the information before continuing.")
@@ -101,7 +102,7 @@ class UserCreation:
             print("\n   Error handled, user updated accordingly. Please check the information before continuing.")
         
         self.driver.switch_to.default_content()
-    
+
     def save_user(self) -> bool:
         '''
         Saves the user on the user creation page.
@@ -110,48 +111,62 @@ class UserCreation:
 
         Uses a class method to obtain the list of errors to check.
         '''
-        self.driver.switch_to.default_content()
-        self.driver.switch_to.frame('gsft_main')
-        save_btn_xpath = '//button[@id="sysverb_insert_and_stay"]'
-        time.sleep(3)
+        self.__switch_frames()
 
-        self.driver.find_element(By.XPATH, save_btn_xpath).click()
-
-        time.sleep(5)
-
+        # check for initial errors (company and pid errors).
+        time.sleep(1)
         errors = self.user_error_msg_check()
-        
-        # returns T/F if there was an error found during the user creation process.
-        if not errors and self.existing_user is False:
-            return False
-        elif 'Unique Key violation' in errors[0]:
-            # either a new user will be created or the existing user is updated, both of which
-            # are determined inside the function call below. uses create_user() and fill_user().
-            print('\n   WARNING: User already exists in the database!')
-            print('   Checking the existing user\'s information.')
-            self.error_duplicate_key()
-            time.sleep(2)
-        elif 'The following mandatory fields' in errors[0]:
-            print("\n   WARNING: An error ocurred with the company field!")
-            print('   Searching the company name list.')
-            self.error_invalid_company()
-            time.sleep(2)
-        elif 'Invalid email address' in errors[0]:
-            print('\n   WARNING: An error ocurred with the email address!')
-            print('   Replacing the email with the username.')
-            self.error_invalid_email()
-        elif 'Invalid update' in errors[0]:
-            print('\n   WARNING: An error ocurred with the project ID field!')
-            print('   Searching the project ID list.')
-            self.error_project_id()
-
+        time.sleep(1)
         if errors:
+            self.__check_errors(errors)
+
+        save_btn_xpath = '//button[@id="sysverb_insert_and_stay"]'
+        self.__switch_frames()
+        save_btn = WebDriverWait(self.driver, 15).until(
+            EC.presence_of_element_located((By.XPATH, save_btn_xpath))
+        )
+        save_btn.click()
+        time.sleep(1.5)
+
+        # check for additional errors after hitting save (duplicate user and bad email).
+        errors = self.user_error_msg_check()
+        time.sleep(1)
+        
+        # if errors exist, then do method X to fix error Y.
+        if errors:
+            self.__check_errors(errors)
+
+            # non-duplicate users will go through the process as normal.
             if self.existing_user is False:
                 self.save_user()
                 self.search_user_list(15)
                 self.fill_user()
+        
+        if not errors and self.existing_user is False:
+            return False
 
         return True
+
+    def __check_errors(self, errors: list):
+        for error in errors:
+                if 'Unique Key violation detected by database' in error:
+                    # either a new user will be created or the existing user is updated, both of which
+                    # are determined inside the function call below. uses create_user() and fill_user().
+                    print('\n   WARNING: User already exists in the database!')
+                    print('   Checking the existing user\'s information.')
+                    self.error_duplicate_key()
+                elif 'The following mandatory fields are not filled in: Company' in error:
+                    print("\n   WARNING: An error ocurred with the company field!")
+                    print('   Searching the company name list.')
+                    self.error_invalid_company()
+                elif 'Invalid email address' in error:
+                    print('\n   WARNING: An error ocurred with the email address!')
+                    print('   Replacing the email with the username.')
+                    self.error_invalid_email()
+                elif 'Invalid update' in error:
+                    print('\n   WARNING: An error ocurred with the project ID field!')
+                    print('   Searching the project ID list.')
+                    self.error_project_id()
 
     def search_user_list(self, time_to_wait: int):
         '''
@@ -159,6 +174,7 @@ class UserCreation:
 
         Takes an int as a parameter for how much time to wait.
         '''
+        # this is used to prevent some recursion issue.
         if self.loop_once is False:
             user_link = 'https://tek.service-now.com/nav_to.do?uri=%2Fsys_user_list.do%3Fsysparm_clear_stack%3Dtrue%26sysparm_userpref_module%3D62354a4fc0a801941509bc63f8c4b979'
 
@@ -186,7 +202,7 @@ class UserCreation:
 
         If any exception is raised during the process, it will attempt the process 3 times before blacklisting the RITM.
         '''
-        # prevent a double-loop for user creation.
+        # this is used to prevent some recursion issue.
         if self.loop_once is False:
             self.driver.switch_to.default_content()
             self.driver.switch_to.frame('gsft_main')
@@ -259,7 +275,7 @@ class UserCreation:
             
             if not stop:
                 print("\n   Inserting in consultant values...")
-                time.sleep(3)
+                time.sleep(1.5)
 
             count = 0
             repeat_attempts = 0
@@ -346,27 +362,48 @@ class UserCreation:
                       'Invalid update']
         errors = []
 
+        # check if an invalid message is below the project ID.
+        try:
+            pid_err_ele = self.driver.find_element(By.XPATH, '//div[@data-fieldmsg-key="sys_user.u_project_id_fieldmsg_invalid_reference"]')
+
+            if pid_err_ele:
+                errors.append(error_list[-1])
+        except NoSuchElementException:
+            pass
+        
+        # check if an invalid message is below the company fields.
+        try:
+            comp_err_ele = self.driver.find_element(By.XPATH, '//div[@data-fieldmsg-key="sys_user.company_fieldmsg_invalid_reference"]')
+
+            if comp_err_ele:
+                errors.append(error_list[0])
+        except NoSuchElementException:
+            pass
+        
+        # this RITM will be blacklisted when the counter is > 3.
         if self.error_counter > 3:
             # TODO: make a custom exception for this!
             raise NoSuchElementException
         
-        # search for if the error exists
-        for error in error_list:
-            element_xpath = self.driver.find_elements(By.XPATH, f'//span[contains(text(), "{error}")]')
+        elements = []
+        for count, error in enumerate(error_list):
+            try:
+                if count == 0:
+                    error_ele = self.driver.find_element(By.XPATH, f'//span[contains(text(), "{error}")]')
+                else:
+                    error_ele = self.driver.find_element(By.XPATH, f'//div[contains(text(), "{error}")]')
+                elements.append(error_ele)
+            except NoSuchElementException:
+                pass
 
-            # invalid email address and invalid update use the same tag.
-            if error == error_list[2] or error == error_list[3]:
-                element_xpath = self.driver.find_elements(By.XPATH, f'//div[contains(text(), "{error}")]')
+        for element in elements:
+            for error in error_list:
+                if error in element.text:
+                    errors.append(element.text)
 
-            if element_xpath:
-                error_msg = element_xpath[0].text
-                errors.append(error_msg)
-                break
-        
         self.error_counter += 1
         return errors
 
-    # NOTE: don't bother refactoring this.
     def error_duplicate_key(self):
         '''
         Unique key violation, this error is a warning that a user already exists with the current username.
@@ -396,26 +433,10 @@ class UserCreation:
 
         count = 0
         if self.eid != 'TBD':
-            if eid_xpath.text == self.eid or eid_xpath.text[0:-2] == self.eid or eid_xpath.text[1:] == self.eid:
+            if eid_xpath.text == self.eid or eid_xpath.text[0:-1] == self.eid or eid_xpath.text[1:] == self.eid:
                 eid_check = True
                 print(f'   Employee ID matched! {self.eid}')
                 time.sleep(1)
-            else:
-                # count each matching number for the employee IDs. if count is at least len(id) - 1, then it is true.
-                # this is because requestors are fucking stupid and forget a single number.
-                print(eid_xpath.text)
-                print(self.eid)
-                for char in eid_xpath.text:
-                    for c in self.eid:
-                        if char == c:
-                            count += 1
-                        else:
-                            continue
-                
-                if count == len(eid_xpath.text) or count == len(eid_xpath.text) - 1:
-                    eid_check = True
-                    print(f'   Employee ID matched! {self.eid}')
-                    time.sleep(1)
         
         # takes into account of if the CSA is stupid and puts down
         # the consultant's username instead of the personal email.
