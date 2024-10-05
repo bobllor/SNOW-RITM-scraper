@@ -1,6 +1,7 @@
 # About the Project
 
 SNOW user creation automation uses Selenium to automate the creation of users to add into the TEKSystem's database.
+
 It scans the taskboard for any tickets that is added to the board, scrape the user information of the ticket, and then fills in the fields required to create the user.
 
 <font color="#AA4A44">***WARNING:***</font> This is tested on a company-specific instance of Service Now- TEKSystem's. It is currently unknown if other instances will work the same way.
@@ -9,7 +10,9 @@ It scans the taskboard for any tickets that is added to the board, scrape the us
 Automatically scrapes RITM tickets for information, which include name, address, organization information, and more- by scanning the taskboard of which the tickets arrive on.
 
 Automatically creates a user with the information obtained from the ticket.
+
 It handles any errors that occur during user creation, which includes existing users, invalid email address, invalid company name, and invalid project ID.
+
 In case of a critical failure due to a bad input (thanks to the people who fill out the information to begin with...) then the ticket will be blacklisted- which requires manual interaction to fix.
 
 Future features: Link with my FedEx label generator to automatically generate the label for the ticket.
