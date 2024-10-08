@@ -10,8 +10,6 @@ class ScrapeRITM:
         self.driver = driver
         self.ritm = ritm
 
-        self.global_search_xpath = '//input[@name="sysparm_search"]'
-
         # these are containers that need to be accessed before being able to grab the values
         self.consultant_info_xpath = '//tr[@id="element.container_23caec60e17c4a00c2ab91d15440c5ee"]'
         self.address_info_xpath = '//tr[@id="element.container_66291a0ae1fc8a00c2ab91d15440c5c2"]'
@@ -27,7 +25,15 @@ class ScrapeRITM:
         
         try:
             # search for global search bar and query the site for an RITM ticket
-            global_search = self.driver.find_element(By.XPATH, self.global_search_xpath)
+            try:
+                global_search_xpath = '//input[@name="sysparm_search"]'
+                global_search = self.driver.find_element(By.XPATH, global_search_xpath)
+            except NoSuchElementException:
+                # used on the new SNOW, i do not know if this will be permanent or a temporary change.
+                # as of 10/8/2024, this seems temporary but putting this here for future proofing.
+                search_container = self.driver.find_element(By.XPATH, '//div[@class="search-container"]')
+                search_container.click()
+                global_search = self.driver.find_element(By.XPATH, '//input[@id="sncwsgs-typeahead-input"]')
             global_search.send_keys(self.ritm)
             global_search.send_keys(Keys.ENTER)
 
@@ -39,7 +45,7 @@ class ScrapeRITM:
             global_search.send_keys(Keys.CONTROL + "a")
             global_search.send_keys(Keys.DELETE)
         except ElementClickInterceptedException:
-            # some issue with clicking the element, so instead reset back to the dashboard.
+            # some issue with clicking the element, so instead reset back to the dashboard to repeat the process.
             print('   ERROR: Something went wrong with the search. Trying the process again.')
             self.driver.get('https://tek.service-now.com/nav_to.do?uri=%2F$pa_dashboard.do')
             time.sleep(5)
@@ -238,7 +244,7 @@ class ScrapeRITM:
             oid = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{oid_xpath}').get_attribute('value')
             olocation = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{olocation_xpath}').get_attribute('value')
 
-            temp['oid'] = f'{oid} - {olocation}'
+            temp['o_id'] = f'{oid} - {olocation}'
 
         # changes the project ID if org is not GS
         if org in allegis_list:

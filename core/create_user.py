@@ -5,6 +5,7 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from components.blanket_admin import AdminRights
+from misc.cust_except import AttemptsException
 import time, re
 
 # NOTE: still requires manual input if something goes wrong.
@@ -95,7 +96,7 @@ class UserCreation:
 
         errors = self.save_user()
         if not errors and not self.existing_user:
-            self.search_user_list(15)
+            self.search_user_list(20)
             self.fill_user()
             print("\n   User created. Please check the information before continuing.")
         else:
@@ -139,7 +140,7 @@ class UserCreation:
             # non-duplicate users will go through the process as normal.
             if self.existing_user is False:
                 self.save_user()
-                self.search_user_list(15)
+                self.search_user_list(20)
                 self.fill_user()
         
         if not errors and self.existing_user is False:
@@ -212,7 +213,7 @@ class UserCreation:
 
             keys_to_send = [self.cid, self.oid, self.oid, self.oid_location, self.div]
             user_cells_obj = []
-            user_cell_xpath = '//tbody[@class="list2_body"]'
+            user_cell_xpath = '//tbody[@class="list2_body -sticky-group-headers"]'
 
             # cell positions: 5* 6 7 8 9 10
             # PID*, CID, OID, OID, office location, division
@@ -224,7 +225,14 @@ class UserCreation:
 
             elements_obj = []
             for path in user_cells_obj:
-                elements_obj.append(self.driver.find_element(By.XPATH, path))
+                # wait for the element to appear and select it, sometimes the driver cannot find it.
+                # if it fails, then just blacklist the RITM.
+                try:
+                    element = WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.XPATH, path)))
+                except TimeoutException:
+                    raise NoSuchElementException
+                
+                elements_obj.append(element)
 
             # initialized below, defined here to prevent an exception in a later loop if a condition isn't met.
             pid_cell_element = ''
@@ -362,6 +370,15 @@ class UserCreation:
                       'Invalid update']
         errors = []
 
+        # check if an invalid message is below the company fields.
+        try:
+            comp_err_ele = self.driver.find_element(By.XPATH, '//div[@data-fieldmsg-key="sys_user.company_fieldmsg_invalid_reference"]')
+
+            if comp_err_ele:
+                errors.append(error_list[0])
+        except NoSuchElementException:
+            pass
+
         # check if an invalid message is below the project ID.
         try:
             pid_err_ele = self.driver.find_element(By.XPATH, '//div[@data-fieldmsg-key="sys_user.u_project_id_fieldmsg_invalid_reference"]')
@@ -371,19 +388,9 @@ class UserCreation:
         except NoSuchElementException:
             pass
         
-        # check if an invalid message is below the company fields.
-        try:
-            comp_err_ele = self.driver.find_element(By.XPATH, '//div[@data-fieldmsg-key="sys_user.company_fieldmsg_invalid_reference"]')
-
-            if comp_err_ele:
-                errors.append(error_list[0])
-        except NoSuchElementException:
-            pass
-        
         # this RITM will be blacklisted when the counter is > 3.
         if self.error_counter > 3:
-            # TODO: make a custom exception for this!
-            raise NoSuchElementException
+            raise AttemptsException
         
         elements = []
         for count, error in enumerate(error_list):
@@ -418,6 +425,8 @@ class UserCreation:
         distinguish the new user from the existing user(s).
         The number is incremented by 1 depending on how many unique users exist.
         '''
+        self.driver.switch_to.default_content()
+        self.driver.switch_to.frame("gsft_main")
         self.search_user_list(5)
         
         # bool to check if the items matches
@@ -425,9 +434,10 @@ class UserCreation:
         email_check = False
 
         # these xpaths can be found by searching for the user in the users list.
-        eid_xpath = self.driver.find_element(By.XPATH, f'//tbody[@class="list2_body"]//td[11]')
-        email_xpath = self.driver.find_element(By.XPATH, f'//tbody[@class="list2_body"]//td[14]')
-        personal_email_xpath = self.driver.find_element(By.XPATH, f'//tbody[@class="list2_body"]//td[15]')
+        table_body_xpath = '//tbody[@class="list2_body -sticky-group-headers"]'
+        eid_xpath = self.driver.find_element(By.XPATH, f'{table_body_xpath}//td[11]')
+        email_xpath = self.driver.find_element(By.XPATH, f'{table_body_xpath}//td[14]')
+        personal_email_xpath = self.driver.find_element(By.XPATH, f'{table_body_xpath}//td[15]')
         email_texts = [email_xpath.text, personal_email_xpath.text]
         print('\n   Comparing information of the existing user and the ticket.\n')
 
@@ -491,9 +501,10 @@ class UserCreation:
                 time.sleep(.5)
                 break
         
-        company_table = '//tbody[@class="list2_body"]'
+        company_table = '//tbody[@class="list2_body -sticky-group-headers"]'
         company_name = '//a[@tabindex="0"]'
 
+        # begin the process of searching, selecting, and create (if applicable) the company.
         self.driver.switch_to.default_content()
 
         company_search_button = self.driver.find_element(By.XPATH, '//span[@id="core_company_hide_search"]//input[@type="search"]')
@@ -584,7 +595,7 @@ class UserCreation:
         
         self.driver.switch_to.default_content()
         
-        project_table = '//tbody[@class="list2_body"]'
+        project_table = '//tbody[@class="list2_body -sticky-group-headers"]'
         project_id = '//a[@role="button"]'
 
         search_container = '//div[@role="search"]'
@@ -610,6 +621,10 @@ class UserCreation:
         
         # create a new project ID.
         if project_list == [] or found is False:
+            # in case an infinite loop occurs during this process, exit out immediately for blacklisting.
+            if self.error_counter == 3:
+                raise AttemptsException
+            
             new_button = self.driver.find_element(By.XPATH, '//button[@value="sysverb_new"]')
             new_button.click()
             time.sleep(1.5)
@@ -675,6 +690,10 @@ class UserCreation:
             time.sleep(1)
             self.driver.switch_to.window(default_window)
             self.driver.switch_to.default_content()
+
+            # used to stop an infinite loop, this is necessary because (at the time of writing this)
+            # it is impossible to check for bad company name errors inside the PID creation window.
+            self.error_counter += 1
 
             self.error_project_id()
     

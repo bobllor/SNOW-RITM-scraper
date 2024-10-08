@@ -3,6 +3,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import JavascriptException
 import time
 '''
 how the VTBScanner works:
@@ -24,6 +25,7 @@ class VTBScanner():
         self.blacklist = set() if blacklist is None else blacklist
 
         self.req_lane = '//li[@v-lane-index="0" and @h-lane-index="0"]'
+        self.count = 0
     
     def get_to_vtb(self) -> None:
         '''
@@ -142,5 +144,13 @@ class VTBScanner():
             time.sleep(1.5)
         except NoSuchElementException:
             raise NoSuchElementException
+        except JavascriptException:
+            # some weird issue with being unable to select the task, it will be blacklisted after 3 counts attempts.
+            self.drag_task(element, 'INC')
+            self.count += 1
+
+            # TODO: make a custom exception.
+            if self.count == 3:
+                raise NoSuchElementException
         
         self.driver.switch_to.default_content()
