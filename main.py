@@ -1,16 +1,17 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.keys import Keys
 from core.login import Login
 from core.scrape import ScrapeRITM
 from core.create_user import UserCreation
 from core.vtb_scanner import VTBScanner
 from components.acc import get_accs
 from components.links import Links
-import misc.text_formats, misc.timing
 from selenium.common.exceptions import NoSuchFrameException, NoSuchElementException 
 from selenium.common.exceptions import ElementClickInterceptedException
-import os, time, traceback
+from misc.cust_except import AttemptsException
+from gui.table import TableGUI
+import misc.text_formats, misc.timing
+import os, time, traceback, random
 from log import logger
 
 def create_user(scraper: ScrapeRITM, links: Links):
@@ -26,16 +27,28 @@ def create_user(scraper: ScrapeRITM, links: Links):
     print("\n   Starting user creation process.")
     time.sleep(3)
     new_user.create_user()
+    # this will be removed later.
     print('\n   Label information:')
     print(f'\t   Ticket info: {" ".join(name)} {ritm} {req}')
     print(f'\t   Address: {address}')
     print(f'\t   Hardware: {requested_item} {" ".join(add_items)}')
     print(f'\t   Need by: {need_by}')
 
+def task_table(tasks: dict[str, list[str]]) -> None:
+    '''
+    Function to create and print the table repeated throughout main.
+    '''
+    clear()
+    table = TableGUI(tasks)
+    table.create_table()
+    table.print_table()
+
 if __name__ == '__main__':
-    clear = lambda: os.system('cls') if os.name == 'nt' else 'clear'
+    clear: None = lambda: os.system('cls') if os.name == 'nt' else 'clear'
+
     options = Options()
     options.add_experimental_option("detach", True)
+    #options.add_experimental_option('excludeSwitches', ['enable-logging'])
 
     driver = webdriver.Chrome(options=options)
 
@@ -55,19 +68,32 @@ if __name__ == '__main__':
     blacklisted_ritms = set()
 
     while stop < 50:
+        # used for displaying the table, state NC/C indicates the status of that particular task.
+        # there are 4 main tasks, each one has sub tasks which the programs go through.
+        # this gets modified during the program, and resets when it loops another RITM.
+        tasks = {
+            'vtb': ['Scanning the VTB', 'NC'],
+            'ritm': ['Getting info for the RITM', 'NC'],
+            'create user': ['Creating the user', 'NC'],
+            'drag': ['Dragging task on the VTB', 'NC']
+        }
+
         if driver.current_url != links.vtb:
             print('\n   Getting to the Visual Task Board...')
         scanner = VTBScanner(driver, links.vtb, blacklisted_ritms)
 
-        # used to open the VTB link, initialized to True to start the process.
+        task_table(tasks)
+        
         print('\n   Scanning the VTB for tasks...')
         time.sleep(2)
 
         if driver.current_url != links.vtb:
             scanner.get_to_vtb()
         else:
-            # if the driver is on the VTB, refresh periodically in case tasks do not show up (due to SNOW).
-            driver.send_keys(Keys.F5)
+            # if the driver is on the VTB, refresh on a random basis (due to VTB not updating).
+            target = random.randint(1, 3)
+            if target == 2:
+                driver.refresh()
         # inside this class method contains code that skips over blacklisted RITMs.
         ritm = scanner.get_ritm_number()
 
@@ -77,22 +103,32 @@ if __name__ == '__main__':
         attempts = 0
         
         while ritm:
+            tasks['vtb'][1] = 'C'
+
             try:
+                task_table(tasks)
                 print(f"\n   Searching for {ritm}...")
                 scraper = ScrapeRITM(driver, ritm)
                 scraper.search_ritm()
 
+                tasks['ritm'][1] = 'C'
+                task_table(tasks)
+
                 create_user(scraper, links)
-                
+                tasks['create user'][1] = 'C'
+                task_table(tasks)
+               
                 # going back to the vtb should always occur after creating a user.
                 scanner.get_to_vtb()
 
                 ritm_element = scanner.get_ritm_element(ritm)
                 if ritm_element:
                     scanner.drag_task(ritm_element, 'RITM')
+                tasks['drag'][1] = 'C'
+                task_table(tasks)
 
                 break                
-            except (NoSuchElementException, NoSuchFrameException):
+            except (NoSuchElementException, NoSuchFrameException, AttemptsException):
                 print('\n   CRITICAL ERROR: Something went wrong during the process. The error has been logged.')
                 blacklisted_ritms.add(ritm)
                 logger(traceback.format_exc())
