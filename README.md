@@ -6,7 +6,8 @@ It scans the taskboard for any tickets that is added to the board, scrape the us
 
 <font color="#AA4A44">***WARNING:***</font> This is tested on a company-specific instance of Service Now- TEKSystem's. It is currently unknown if other instances will work the same way.
 
-## Features:
+# Features
+
 Automatically scrapes RITM tickets for information, which include name, address, organization information, and more- by scanning the taskboard of which the tickets arrive on.
 
 Automatically creates a user with the information obtained from the ticket.
@@ -15,7 +16,11 @@ It handles any errors that occur during user creation, which includes existing u
 
 In case of a critical failure due to a bad input (thanks to the people who fill out the information to begin with...) then the ticket will be blacklisted- which requires manual interaction to fix.
 
-Future features: Link with my FedEx label generator to automatically generate the label for the ticket.
+## Upcoming Features
+
+1. Link the FedEx label generator to automatically create the label without needing any manual input.
+2. Add manual RITM input, if automatic is not your mojo.
+3. Close out RITMs with a manual input.
 
 ## Getting Started
 
