@@ -24,7 +24,7 @@ class UserCreation:
         self.requestor = requestor
 
         # company info, 8 instances are initialized from a list from ScrapeRITM.
-        # keys: email, e_id, division, c_id, company, o_id, p_id, org
+        # keys: email, e_id, division, c_id, company, o_id, p_id, org, o_id_loc
         self.email = user_info['email'].strip()
         self.eid = user_info['e_id']
         self.div = user_info['division']
@@ -33,11 +33,11 @@ class UserCreation:
         self.oid = user_info['o_id']
         self.pid = user_info['p_id']
         self.org = user_info['org']
+        self.oid_location = user_info['o_id_loc']
 
         self.admin = AdminRights(self.company).check_blanket() if admin is None else admin
 
         # initialized in a future function call
-        self.oid_location = ""
         self.user_name = ""
 
         # used for duplicate keys, increments by 1 if the new user is unique.
@@ -58,6 +58,9 @@ class UserCreation:
         # the error message at the top of the page will not go away and cause an infinite loop.
         # when > 3, an exception will be thrown and blacklist the RITM.
         self.error_counter = 0
+        # this is set to true when fill_user is executed, due to a recursion issue after creating a unique
+        # user, the program goes back to save_user and breaks the program. this prevents the issue from occuring.
+        self.prevent_save_user = False
 
     def __switch_frames(self):
         self.driver.switch_to.default_content()
@@ -112,39 +115,41 @@ class UserCreation:
 
         Uses a class method to obtain the list of errors to check.
         '''
-        self.__switch_frames()
+        # used to prevent a recursion issue, check __init__ for more details.
+        if not self.prevent_save_user:
+            self.__switch_frames()
 
-        # check for initial errors (company and pid errors).
-        time.sleep(1)
-        errors = self.user_error_msg_check()
-        time.sleep(1)
-        if errors:
-            self.__check_errors(errors)
+            # check for initial errors (company and pid errors).
+            time.sleep(1)
+            errors = self.user_error_msg_check()
+            time.sleep(1)
+            if errors:
+                self.__check_errors(errors)
 
-        save_btn_xpath = '//button[@id="sysverb_insert_and_stay"]'
-        self.__switch_frames()
-        save_btn = WebDriverWait(self.driver, 15).until(
-            EC.presence_of_element_located((By.XPATH, save_btn_xpath))
-        )
-        save_btn.click()
-        time.sleep(1.5)
+            save_btn_xpath = '//button[@id="sysverb_insert_and_stay"]'
+            self.__switch_frames()
+            save_btn = WebDriverWait(self.driver, 15).until(
+                EC.presence_of_element_located((By.XPATH, save_btn_xpath))
+            )
+            save_btn.click()
+            time.sleep(1.5)
 
-        # check for additional errors after hitting save (duplicate user and bad email).
-        errors = self.user_error_msg_check()
-        time.sleep(1)
-        
-        # if errors exist, then do method X to fix error Y.
-        if errors:
-            self.__check_errors(errors)
+            # check for additional errors after hitting save (duplicate user and bad email).
+            errors = self.user_error_msg_check()
+            time.sleep(1)
+            
+            # if errors exist, then do method X to fix error Y.
+            if errors:
+                self.__check_errors(errors)
 
-            # non-duplicate users will go through the process as normal.
-            if self.existing_user is False:
-                self.save_user()
-                self.search_user_list(20)
-                self.fill_user()
-        
-        if not errors and self.existing_user is False:
-            return False
+                # non-duplicate users will go through the process as normal.
+                if self.existing_user is False:
+                    self.save_user()
+                    self.search_user_list(20)
+                    self.fill_user()
+            
+            if not errors and self.existing_user is False:
+                return False
 
         return True
 
@@ -205,6 +210,8 @@ class UserCreation:
         '''
         # this is used to prevent some recursion issue.
         if self.loop_once is False:
+            self.prevent_save_user = True
+            
             self.driver.switch_to.default_content()
             self.driver.switch_to.frame('gsft_main')
             # indicate to stop this function from executing its main loop, 
@@ -225,13 +232,20 @@ class UserCreation:
 
             elements_obj = []
             for path in user_cells_obj:
-                # wait for the element to appear and select it, sometimes the driver cannot find it.
-                # if it fails, then just blacklist the RITM.
-                try:
-                    element = WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.XPATH, path)))
-                except TimeoutException:
-                    raise NoSuchElementException
-                
+                # wait for the element to appear and select it, if a timeout exception occurs then refresh the page.
+                # if it happens a second time, then the RITM will be blacklisted.
+                attempts = 0
+                while True:
+                    try:
+                        element = WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.XPATH, path)))
+                        break
+                    except TimeoutException:
+                        self.driver.refresh()
+
+                        if attempts == 2:
+                            raise AttemptsException
+                        attempts += 1
+                        
                 elements_obj.append(element)
 
             # initialized below, defined here to prevent an exception in a later loop if a condition isn't met.
@@ -302,6 +316,7 @@ class UserCreation:
                         time.sleep(1.5)
                         cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="sys_display.LIST_EDIT_sys_user.u_project_id"]')
                     else:
+                        # normal fill operation.
                         ActionChains(self.driver).double_click(elements_obj[count]).perform()
                         time.sleep(.5)
                         cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="cell_edit_value"]')
@@ -387,10 +402,6 @@ class UserCreation:
                 errors.append(error_list[-1])
         except NoSuchElementException:
             pass
-        
-        # this RITM will be blacklisted when the counter is > 3.
-        if self.error_counter > 3:
-            raise AttemptsException
         
         elements = []
         for count, error in enumerate(error_list):
@@ -582,8 +593,7 @@ class UserCreation:
         default_window = self.driver.current_window_handle
 
         time.sleep(2)
-        self.driver.switch_to.default_content()
-        self.driver.switch_to.frame("gsft_main")
+        self.__switch_frames()
         self.driver.find_element(By.XPATH, '//button[@name="lookup.sys_user.u_project_id"]').click()
         time.sleep(5)
 
@@ -752,6 +762,7 @@ class UserCreation:
         email_key = self.email
         personal_key = self.email
         
+        # honestly it could work with just checking for @, but i don't want to test it.
         if self.email.upper() == 'TBD' or self.email == '' or '@' not in self.email:
             email_key = self.user_name
             personal_key = ''
@@ -777,25 +788,11 @@ class UserCreation:
       
         time.sleep(.5)
 
-        self.__format_office_id()
         self.driver.find_element(By.ID, "sys_user.u_office_id").send_keys(self.oid)
         
         time.sleep(.5)
 
         self.driver.find_element(By.ID, 'sys_display.sys_user.company').send_keys(self.company)
- 
-    def __format_office_id(self):
-        '''
-        Formats the office ID by splitting the "-" inside the original office ID string.
-
-        Initializes two attributes, office ID and office location.
-        '''
-        # separates the office ID and office location from the single string.
-        full_oid = self.oid
-        full_oid = full_oid.split("-", 1)
-
-        self.oid = full_oid[0].strip()
-        self.oid_location = full_oid[-1].strip()
     
     def __name_keys(self):
         '''
