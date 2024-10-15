@@ -233,6 +233,14 @@ class ScrapeRITM:
         for key, xpath in company_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{xpath}")
             part = element_xpath.get_attribute("value")
+
+            if key == 'company':
+                # an error checker if a colon exists in the RITM for a bad input, this will remove
+                # the colon from the name, so far only three RITMs had this issue.
+                if ':' in part:
+                    i = part.find(':')
+                    part = part[i + 1:]
+
             temp[key] = part.strip()
         
         # Not Listed creates two new fields for the office ID and location/name. 
@@ -258,6 +266,23 @@ class ScrapeRITM:
             temp['p_id'] = 'TEKSTAFFING'
 
         temp['org'] = org
+
+        temp['o_id'], temp['o_id_loc'] = self.__format_office_id(temp['o_id'])
         
         # NOTE: bad employee IDs gets converted to TBD in class UserCreation.
         return temp
+
+    def __format_office_id(self, oid: str):
+        '''
+        Formats the office ID by splitting the "-" inside the original office ID string.
+
+        Returns the formated attributes, office ID and office location.
+        '''
+        # separates the office ID and office location from the single string.
+        full_oid = oid
+        full_oid = full_oid.split("-", 1)
+
+        oid = full_oid[0].strip()
+        oid_location = full_oid[-1].strip()
+
+        return oid, oid_location
