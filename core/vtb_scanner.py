@@ -25,7 +25,6 @@ class VTBScanner():
         self.blacklist = set() if blacklist is None else blacklist
 
         self.req_lane = '//li[@v-lane-index="0" and @h-lane-index="0"]'
-        self.count = 0
     
     def get_to_vtb(self) -> None:
         '''
@@ -134,23 +133,16 @@ class VTBScanner():
             lane = inc_lane
 
         try:
-            drag_task = ActionChains(self.driver).click_and_hold(element)
+            action = ActionChains(self.driver)
+            action.click_and_hold(element)
             time.sleep(1)
-            drag_task.move_to_element(lane)
+            action.move_to_element(lane)
             time.sleep(1)
-            drag_task.release(lane).perform()
+            action.release(lane).perform()
 
             print('   Task dragged.')
             time.sleep(1.5)
         except NoSuchElementException:
             raise NoSuchElementException
-        except JavascriptException:
-            # some weird issue with being unable to select the task, it will be blacklisted after 3 counts attempts.
-            self.drag_task(element, 'INC')
-            self.count += 1
-
-            # TODO: make a custom exception.
-            if self.count == 3:
-                raise NoSuchElementException
         
         self.driver.switch_to.default_content()
