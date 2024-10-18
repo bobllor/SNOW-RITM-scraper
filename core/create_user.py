@@ -37,9 +37,8 @@ class UserCreation:
 
         self.admin = AdminRights(self.company).check_blanket() if admin is None else admin
 
-        # initialized in a future function call
+        # initialized in a future function call, this is necessary because of potential duplicate users.
         self.user_name = ""
-
         # used for duplicate keys, increments by 1 if the new user is unique.
         # NOTE: the first duplicate user starts at 1.
         self.user_name_unique_id = 0
@@ -518,7 +517,7 @@ class UserCreation:
         # begin the process of searching, selecting, and create (if applicable) the company.
         self.driver.switch_to.default_content()
 
-        company_search_button = self.driver.find_element(By.XPATH, '//span[@id="core_company_hide_search"]//input[@type="search"]')
+        '''company_search_button = self.driver.find_element(By.XPATH, '//span[@id="core_company_hide_search"]//input[@type="search"]')
         
         # search the company name in the search bar
         company_search_button.send_keys(Keys.CONTROL + 'a')
@@ -528,7 +527,7 @@ class UserCreation:
         company_search_button.send_keys(self.company.lower())
         time.sleep(.5)
         company_search_button.send_keys(Keys.ENTER)
-        time.sleep(3)
+        time.sleep(3)'''
 
         company_list = self.driver.find_elements(By.XPATH, f'{company_table}{company_name}')
 
@@ -566,7 +565,7 @@ class UserCreation:
                 self.driver.switch_to.default_content()
 
                 # prevent an infinite loop.
-                self.company_created = True
+                #self.company_created = True
 
                 # call function again to select the company name.
                 self.error_invalid_company()
@@ -648,6 +647,9 @@ class UserCreation:
             ppoc_field = self.driver.find_element(By.XPATH, '//input[@id="sys_display.u_projects.u_primary_poc"]')
             ppoc_field.send_keys(self.requestor)
             time.sleep(.5)
+            ppoc_field.send_keys(Keys.ARROW_DOWN)
+            time.sleep(.5)
+            ppoc_field.send_keys(Keys.ENTER)
 
             # company field, if pid_error is true then the steps to create the pid is changed.
             company_field = self.driver.find_element(By.XPATH, '//input[@id="sys_display.u_projects.u_company"]')
@@ -808,9 +810,16 @@ class UserCreation:
             name = name.replace("-", " ")
 
         name = name.split()
+        
+        last_name = name[-1]
+
+        # checks if the last value in the name is a suffix
+        suffixes = {'jr', 'sr', '1st', '2nd', '3rd', '4th', 'I', 'II', 'III', 'IV'}
+        if name[-1].lower().strip('.') in suffixes:
+            last_name = name[-2]
 
         # name keys will always be the first and last name, regardless of X middle names.
-        return name[0], name[-1]
+        return name[0], last_name
     
     def __format_project_id(self):
         '''
