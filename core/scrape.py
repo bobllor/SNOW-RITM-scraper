@@ -175,7 +175,7 @@ class ScrapeRITM:
     # returns keys: email, e_id, division, c_id, company, o_id, p_id, org
     def scrape_user_info(self) -> dict:
         # list for these pieces of shit, they change the xpaths of normal builds.
-        allegis_list = ["Aerotek", "Aston Carter", "Actalent"]
+        allegis_list = ["Aerotek", "Aston Carter", "Actalent", "MLA"]
 
         temp = {}
 
@@ -239,7 +239,7 @@ class ScrapeRITM:
                 # the colon from the name, so far only three RITMs had this issue.
                 if ':' in part:
                     i = part.find(':')
-                    part = part[i + 1:]
+                    part = part[i + 1:].strip().strip('.')
 
             temp[key] = part.strip()
         
