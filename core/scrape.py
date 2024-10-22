@@ -3,6 +3,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import ElementClickInterceptedException
 from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import time
 
 class ScrapeRITM:
@@ -27,7 +28,7 @@ class ScrapeRITM:
             # search for global search bar and query the site for an RITM ticket
             try:
                 global_search_xpath = '//input[@name="sysparm_search"]'
-                global_search = self.driver.find_element(By.XPATH, global_search_xpath)
+                global_search = WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.XPATH, global_search_xpath)))
             except NoSuchElementException:
                 # used on the new SNOW, i do not know if this will be permanent or a temporary change.
                 # as of 10/8/2024, this seems temporary but putting this here for future proofing.
