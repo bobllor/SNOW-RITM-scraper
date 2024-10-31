@@ -19,6 +19,8 @@ class ScrapeRITM:
 
         # xpath that does not require a container to access
         self.req_xpath = '//input[@id="sys_display.sc_req_item.request"]'
+
+        self.allegis_orgs = ["Aerotek", "Aston Carter", "Actalent", "MLA"]
     
     def search_ritm(self):
         # ensure that driver is not in a frame before performing a search.
@@ -137,8 +139,11 @@ class ScrapeRITM:
         return req
 
     def scrape_requestor(self) -> str:
+        '''
+        REturns the requestor's email address, this is used for creating new project IDs when an error shows up.
+        '''
         self.driver.find_element(By.XPATH, '//button[@name="viewr.sc_req_item.request.requested_for"]').click()
-        time.sleep(2.5)
+        time.sleep(1)
         req_element = self.driver.find_element(By.XPATH, '//input[@id="sys_readonly.sys_user.user_name"]')
 
         return req_element.get_attribute("value")
@@ -173,106 +178,181 @@ class ScrapeRITM:
         
         return requested_item, items
     
-    # returns keys: email, e_id, division, c_id, company, o_id, p_id, org
     def scrape_user_info(self) -> dict:
-        # list for these pieces of shit, they change the xpaths of normal builds.
-        allegis_list = ["Aerotek", "Aston Carter", "Actalent", "MLA"]
+        '''
+        Returns a dict that contains information from the ticket to create them in the database.
 
-        temp = {}
+        The dict contains:
+            1. email
+            2. employee ID
+            3. division
+            4. customer ID
+            5. company name
+            6. office ID
+            7. project ID
+            8. office ID location
+            9. organization
+        '''
+        # orgs: allegis groups (see above), STAFFING, and GS
+        org = self.__scrape_org()
 
+        pid = self.__scrape_project_id(org)
+
+        oid, oid_location = self.__format_office_id(self.__scrape_office_id())
+
+        cid = self.__scrape_customer_id()
+        company = self.__scrape_company(org)
+
+        email = self.__scrape_email()
+        eid = self.__scrape_employee_id()
+
+        divison = self.__scrape_division(org)
+
+        return {'email': email, 'e_id': eid, 'division': divison, 'c_id': cid,
+                'company': company, 'o_id': oid, 'p_id': pid, 'o_id_loc': oid_location,
+                'org': org}
+    
+    def __scrape_org(self) -> str:
+        '''
+        Returns the organization value on the RITM.
+
+        This value is either GS, Staffing, or Allegis companies (Actalent, Aerotek, Aston Carter, MLA).
+        
+        If the org is an Allegis company, then the following will be changed:
+            1. Project ID
+            2. Company
+            3. Division
+        '''
         # organization container, contains global services, staffing, or allegis orgs
         org_xpath = '//option[contains(@selected, "SELECTED")]'
         org_ele_xpath = self.driver.find_element(By.XPATH, f"{self.org_info_xpath}{org_xpath}")
         org = org_ele_xpath.get_attribute("value")
 
+        return org
+    
+    def __scrape_project_id(self, org: str) -> str:
+        '''
+        Returns the PID for the RITM. Requires an `org` argument in order to return the correct
+        PID value.
+
+        The PID value is dependent on the type of organization the consultant belongs to.
+            'GS': 10 digit number- example: 0000123456
+            'Staffing': TEKSTAFFING
+            'Any Allegis Orgs': ALLEGIS_ORO (the PID is the same as the org)
+        '''
+        if org == 'GS':
+            pid_xpath = '//tr[7]//input[@class="cat_item_option sc-content-pad form-control"]'
+        
+            pid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{pid_xpath}").get_attribute("value")
+    
+        if org ==  'Staffing':
+            pid = 'TEKSTAFFING'
+
+        # allegis organizations are missing the PID field, but the PID for these are the orgs itself.
+        if org in self.allegis_orgs:
+            # formatting the name? i actually don't remember what this is used for.
+            if org == 'Actalent':
+                org = 'ACTALENT'
+
+            return org
+        
+        return pid
+
+    def __scrape_customer_id(self) -> str:
+        # these two are options that when chosen, will change the xpath of the CID, from [19] to [22].
+        customer_id_values = ["New Customer", "Not Listed"]
+
+        # by default [19] will be the value of CID, assuming that this is an existing company.
+        cid_xpath = '//tr[19]//input[@class="questionsetreference form-control element_reference_input"]'
+        cid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value")
+
+        # related to above, 
+        if cid in customer_id_values:
+            cid_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
+            cid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value")
+
+        # takes into account of idiots (like JW) who put the company name in the CID field.
+        # this should very rarely ever be seen, but more idiot-proof code is better.
+        if not cid.isdigit():
+            cid_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
+            cid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value")
+
+        return cid
+    
+    def __scrape_office_id(self) -> str:
         try:
             oid_xpath = '//tr[24]//input[@class="questionsetreference form-control element_reference_input"]'
         except NoSuchElementException:
-            # in case of an exception- this shouldn't happen often except for fucking allegis.
+            # in case of an exception- this shouldn't happen often except for fucking aerotek.
             oid_xpath = '//tr[24]//input[@class="cat_item_option sc-content-pad form-control"]'
 
-        cid_xpath = '//tr[19]//input[@class="questionsetreference form-control element_reference_input"]'
-        # if CID is not a number, then a new field will appear below the company name.
-        # this pushes the CID from [19] to [22]
-        customer_id_values = ["New Customer", "Not Listed"]
-        if self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value") in customer_id_values:
-            cid_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
-        company_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
-        # what if a new customer puts the cid in the company name field instead?
-        # this takes into account of idiots like JW who puts in the wrong input in the field.
-        if self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{company_xpath}').get_attribute('value').isdigit():
-            company_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
-            cid_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
+        oid = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{oid_xpath}').get_attribute('value')
 
-        email_xpath = '//tr[3]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
-        eid_xpath = '//tr[4]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
-
-        # consultant container, contains employee ID and email address
-        consultant_xpaths = [('email', email_xpath), ('e_id', eid_xpath)]
-        for key, xpath in consultant_xpaths:
-            element_xpath = self.driver.find_element(By.XPATH, f"{self.consultant_info_xpath}{xpath}")
-            part = element_xpath.get_attribute("value")
-
-            temp[key] = part
-        
-        div_xpath = '//table[@class="container_table"]/tbody/tr[2]//option[@selected="SELECTED"]'
-        div_value = self.driver.find_element(By.XPATH, f'{self.consultant_info_xpath}{div_xpath}').get_attribute("value")
-        # depending on the selected division #, the xpath can either be tr[1] or tr[2].
-        # if the value is empty, then try the other xpath instead.
-        if div_value == '':
-            div_xpath = '//table[@class="container_table"]/tbody/tr[1]//option[@selected="SELECTED"]'
-            div_value = self.driver.find_element(By.XPATH, f'{self.consultant_info_xpath}{div_xpath}').get_attribute("value")
-        temp['division'] = div_value
-
-        # company container, contains company information (customer ID, company name, office ID)
-        company_xpaths = [('c_id', cid_xpath), ('company', company_xpath), ('o_id', oid_xpath)]
-        # append project ID if xpath if org is GS, other orgs removes the project ID field.
-        if org == 'GS':
-            pid_xpath = '//tr[7]//input[@class="cat_item_option sc-content-pad form-control"]'
-            company_xpaths.append(('p_id', pid_xpath))
-        
-        for key, xpath in company_xpaths:
-            element_xpath = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{xpath}")
-            part = element_xpath.get_attribute("value")
-
-            if key == 'company':
-                # an error checker if a colon exists in the RITM for a bad input, this will remove
-                # the colon from the name, so far only three RITMs had this issue.
-                if ':' in part:
-                    i = part.find(':')
-                    part = part[i + 1:].strip().strip('.')
-
-            temp[key] = part.strip()
-        
-        # Not Listed creates two new fields for the office ID and location/name. 
-        # user_info[5] is oid.
-        if 'Not Listed' in self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{oid_xpath}').get_attribute('value'):
+        # Not Listed in the initial field will change the xpaths for the office ID and location/name.
+        if 'Not Listed' in oid:
             oid_xpath = '//tr[25]//input[@class="cat_item_option sc-content-pad form-control"]'
             olocation_xpath = '//tr[26]//input[@class="cat_item_option sc-content-pad form-control"]'
 
             oid = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{oid_xpath}').get_attribute('value')
-            olocation = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{olocation_xpath}').get_attribute('value')
+            o_location = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{olocation_xpath}').get_attribute('value')
 
-            temp['o_id'] = f'{oid} - {olocation}'
+            oid = f'{oid} - {o_location}'
 
-        # changes the project ID if org is not GS
-        if org in allegis_list:
-            if org == "Actalent":
-                org = "ACTALENT"
-            # modifies division, company, PID
-            temp['division'] = org
-            temp['company'] = org
-            temp['p_id'] = org
-        elif org == 'Staffing':
-            temp['p_id'] = 'TEKSTAFFING'
+        return oid
 
-        temp['org'] = org
-
-        temp['o_id'], temp['o_id_loc'] = self.__format_office_id(temp['o_id'])
+    def __scrape_company(self, org: str) -> str:
+        # the company field is missing, but it is the same as the org for allegis orgs.
+        if org in self.allegis_orgs:
+            return org
         
-        # NOTE: bad employee IDs gets converted to TBD in class UserCreation.
-        return temp
+        # by default it company field is [21], however some circumstances may drop it down to [22]- see below.
+        company_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
+        company = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{company_xpath}').get_attribute('value')
+        # takes into account of idiots (like JW) who put the CID in the company field.
+        # this should very rarely ever be seen, but more idiot-proof code is better.
+        if company.isdigit():
+            company_xpath = company_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
+            company = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{company_xpath}')
+        
+        # in case that a colon is used in the company name.
+        if ':' in company:
+            i = company.find(':')
+            company = company[i + 1:].strip().strip('.')
 
+        return company.strip()
+    
+    def __scrape_email(self) -> str:
+        email_xpath = '//tr[3]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
+        email = self.driver.find_element(By.XPATH, f"{self.consultant_info_xpath}{email_xpath}").get_attribute("value")
+        
+        return self.__validate_string(email)
+    
+    def __scrape_employee_id(self) -> str:
+        eid_xpath = '//tr[4]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
+        eid = self.driver.find_element(By.XPATH, f"{self.consultant_info_xpath}{eid_xpath}").get_attribute("value")
+
+        # if EID is not a valid input then leave it as TBD.
+        if not eid.isdigit() or eid.strip('0') == '':
+            eid = 'TBD'
+
+        return eid
+
+    def __scrape_division(self, org: str) -> str:
+        # division for these fields are the same as their orgs.
+        if org in self.allegis_orgs:
+            return org
+        
+        div_xpath = '//table[@class="container_table"]/tbody/tr[2]//option[@selected="SELECTED"]'
+        div = self.driver.find_element(By.XPATH, f'{self.consultant_info_xpath}{div_xpath}').get_attribute("value")
+        
+        # depending on the selected division #, the xpath can either be tr[1] or tr[2].
+        # if the value is empty, then try the other xpath instead.
+        if div == '':
+            div_xpath = '//table[@class="container_table"]/tbody/tr[1]//option[@selected="SELECTED"]'
+            div = self.driver.find_element(By.XPATH, f'{self.consultant_info_xpath}{div_xpath}').get_attribute("value")
+
+        return div
+    
     def __format_office_id(self, oid: str):
         '''
         Formats the office ID by splitting the "-" inside the original office ID string.
@@ -287,3 +367,28 @@ class ScrapeRITM:
         oid_location = full_oid[-1].strip()
 
         return oid, oid_location
+
+    def __validate_string(self, string: str) -> str:
+        '''
+        Validates a string, removes any unwanted characters from a string.
+        '''
+        escape_chars = {'\n', '\t'}
+        bad_chars = {'<', '>'}
+
+        # checks for any escape characters in the string.
+        # if an escape character is found, start the string at the position of the escape char.
+        pos_list = [pos for pos in range(len(string)) if string[pos] in escape_chars]
+        if pos_list:
+            string = string[pos_list[0]:]
+
+        # checks for any blacklisted characters in the string.
+        bad_list = [pos for pos in range(len(string)) if string[pos] in bad_chars]
+        if bad_list:
+            for char in bad_chars:
+                string = string.replace(char, ' ')
+            
+            pos = string.find(' ')
+            if pos != -1:
+                string = string[pos:]
+        
+        return string.strip()
