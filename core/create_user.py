@@ -60,6 +60,8 @@ class UserCreation:
         # this is set to true when fill_user is executed, due to a recursion issue after creating a unique
         # user, the program goes back to save_user and breaks the program. this prevents the issue from occuring.
         self.prevent_save_user = False
+        # used for `fill_user` to stop the process of filling in the user if all existing values match the RITM values.
+        self.stop = False
 
     def __switch_frames(self):
         self.driver.switch_to.default_content()
@@ -74,36 +76,45 @@ class UserCreation:
 
     def create_user(self):
         '''
-        Create the user into Service NOW's database.
+        Creates the user to add in SNOW's database.
+
+        Checks if the user exists first by searching by their email address. 
+        
+        If an email address does not exist, then a new user will be created. 
+        Otherwise, the user will be edited in the database table.
         '''
-        self.driver.get(self.link)
-        time.sleep(3)
-        self.driver.switch_to.frame("gsft_main")
-
-        self.__send_consultant_keys()
-
-        f_name, l_name = self.__name_keys()
-        
-        self.user_name = f"{f_name}.{l_name}@teksystemsgs.com"
-        # if the unique ID is > 0, then this is a different user with the same name as an existing one.
-        if self.user_name_unique_id > 0:
-            self.user_name = f'{f_name}.{l_name}{str(self.user_name_unique_id)}@teksystemsgs.com'
-        self.__send_email_keys()
-
-        self.__send_org_keys()
-
-        self.driver.find_element(By.XPATH, '//input[@id="sys_user.first_name"]').click()
-
-        time.sleep(2)
-
-        errors = self.save_user()
-        if not errors and not self.existing_user:
-            self.search_user_list(20)
+        # check_user_list returns true/false, existing user/new user.
+        if self.__check_user_list() and not self.existing_user:
+            self.existing_user = True
             self.fill_user()
-            print("\n   User created. Please check the information before continuing.")
         else:
-            print("\n   Error handled, user updated accordingly. Please check the information before continuing.")
+            self.driver.get(self.link)
+            time.sleep(3)
+            self.driver.switch_to.frame("gsft_main")
+
+            self.__send_consultant_keys()
+
+            f_name, l_name = self.__name_keys()
+            
+            self.user_name = f"{f_name}.{l_name}@teksystemsgs.com"
+            # if the unique ID is > 0, then this is a different user with the same name as an existing one.
+            if self.user_name_unique_id > 0:
+                self.user_name = f'{f_name}.{l_name}{str(self.user_name_unique_id)}@teksystemsgs.com'
+            self.__send_email_keys()
+
+            self.__send_org_keys()
+
+            self.driver.find_element(By.XPATH, '//input[@id="sys_user.first_name"]').click()
+
+            time.sleep(2)
+
+            errors = self.save_user()
         
+            if not errors and not self.existing_user:
+                self.search_user_list(20)
+                self.fill_user()
+        
+        print("\n   User created. Please check the information before continuing.")
         self.driver.switch_to.default_content()
 
     def save_user(self) -> bool:
@@ -193,7 +204,7 @@ class UserCreation:
             # long wait time due to SNOW's slow updating, can't do anything about it.
             time.sleep(time_to_wait)
             user_search = self.driver.find_element(By.XPATH, search)
-            user_search.send_keys(self.user_name)
+            user_search.send_keys(self.email)
             time.sleep(1)
             user_search.send_keys(Keys.ENTER)
 
@@ -209,10 +220,9 @@ class UserCreation:
         '''
         # this is used to prevent some recursion issue.
         if self.loop_once is False:
-            self.prevent_save_user = True
+            #self.prevent_save_user = True
             
-            self.driver.switch_to.default_content()
-            self.driver.switch_to.frame('gsft_main')
+            self.__switch_frames()
             # indicate to stop this function from executing its main loop, 
             # condition is only True if existing values of a cell are all matching.
             stop = False
@@ -252,55 +262,20 @@ class UserCreation:
             # checks if the cell values are the same as the ticket info.
             # if True, then remove the web object from the list to not fill.
             if self.existing_user:
-                # if it is an existing user, insert PID to the beginning to modify it (if not matching).
-                # NOTE: elements_obj[0] will be changed later if the PID cell doesn't match.
-                pid_cell_element = self.driver.find_element(By.XPATH, f'{user_cell_xpath}//td[5]')
-
-                elements_obj.insert(0, pid_cell_element)
-                keys_to_send.insert(0, self.pid)
-
-                index_remover = []
-                cell_names = ['Project ID', 'Customer ID', 'Office Number',
-                            'Office ID', 'Office Location', 'Division']
-                match_count = 0
-
-                # if a cell matches to the key, track the index number.
-                for index, web_obj in enumerate(elements_obj):
-                    if web_obj.text.lower() == keys_to_send[index].lower():
-                        print(f'   {cell_names[index]} {web_obj.text} matches.')
-                        index_remover.append(index)
-                        time.sleep(.5)
-                        match_count += 1
-                    else:
-                        print(f'   {cell_names[index]} {web_obj.text} does not match.')
-                
-                if match_count == 6:
-                    print('   No values need to be updated.')
-                    stop = True
-
-                for index in sorted(index_remover, reverse=True):
-                    del elements_obj[index]
-                    del keys_to_send[index]
-                
-                if keys_to_send:
-                    # changes the xpath "//td[5]" to the name cell "//td[4]".
-                    # this is done to work around the href link found in "//td[5]"- check the while loop below.
-                    if elements_obj[0] == pid_cell_element:
-                        pid_cell_element = self.driver.find_element(By.XPATH, f'{user_cell_xpath}//td[4]')
-                        elements_obj[0] = pid_cell_element
+                self.__check_cell_values(keys_to_send, elements_obj)
             else:
                 # remove oid/3rd element as it is filled during the user creation.
                 # only applicable if this is not an existing user.
                 del keys_to_send[2]
                 del elements_obj[2]
             
-            if not stop:
+            if not self.stop:
                 print("\n   Inserting in consultant values...")
                 time.sleep(1.5)
 
             count = 0
             repeat_attempts = 0
-            while count < len(keys_to_send) and repeat_attempts != 3 and not stop:
+            while count < len(keys_to_send) and repeat_attempts != 3 and not self.stop:
                 # try block is used to keep trying in case an error occurs 
                 # during the attempt to fill a status cell in, max 3 repeats.
                 try:
@@ -368,6 +343,61 @@ class UserCreation:
                 raise NoSuchElementException
         
             self.driver.switch_to.default_content()
+
+    def __check_cell_values(self, keys_to_send, elements_obj) -> None:
+        '''
+        Checks the user cell values in the database table for any mismatching values.
+        
+        Has two parameters:
+            1. `keys_to_send` is a list of keys that are the values entered to the cells.
+            2. `elements_obj` is a list of elements object xpaths of the cell in the table.
+
+        It modifies the list `keys_to_send` and `elements_obj` to add and remove cells based on matching values.
+        Passes by reference for the two arguments.
+
+        This only applies on duplicate users or if a user exists in the database already.
+        '''
+        # xpath for where the child user cells are located.
+        user_cell_xpath = '//tbody[@class="list2_body -sticky-group-headers"]'
+        # initialized below, defined here to prevent an exception in a later loop if a condition isn't met.
+        pid_cell_element = ''
+        # if it is an existing user, insert PID to the beginning to modify it (if not matching).
+        # NOTE: elements_obj[0] will be changed later if the PID cell doesn't match.
+        pid_cell_element = self.driver.find_element(By.XPATH, f'{user_cell_xpath}//td[5]')
+
+        # insert these two elements to the front for both checking and modifying.
+        elements_obj.insert(0, pid_cell_element)
+        keys_to_send.insert(0, self.pid)
+
+        index_remover = []
+        cell_names = ['Project ID', 'Customer ID', 'Office Number',
+                    'Office ID', 'Office Location', 'Division']
+        match_count = 0
+
+        # if a cell matches to the key, track the index number.
+        for index, web_obj in enumerate(elements_obj):
+            if web_obj.text.lower() == keys_to_send[index].lower():
+                print(f'   {cell_names[index]} {web_obj.text} matches.')
+                index_remover.append(index)
+                time.sleep(.5)
+                match_count += 1
+            else:
+                print(f'   {cell_names[index]} {web_obj.text} does not match.')
+        
+        if match_count == 6:
+            print('   No values need to be updated.')
+            self.stop = True
+
+        for index in sorted(index_remover, reverse=True):
+            del elements_obj[index]
+            del keys_to_send[index]
+        
+        if keys_to_send:
+            # changes the xpath "//td[5]" to the name cell "//td[4]".
+            # this is done to work around the href link found in "//td[5]"- check the while loop below.
+            if elements_obj[0] == pid_cell_element:
+                pid_cell_element = self.driver.find_element(By.XPATH, f'{user_cell_xpath}//td[4]')
+                elements_obj[0] = pid_cell_element
 
     def user_error_msg_check(self):
         '''
@@ -748,6 +778,55 @@ class UserCreation:
         self.driver.find_element(By.ID, "sys_user.employee_number").send_keys(self.eid)
         time.sleep(3)
     
+    def __check_user_list(self) -> bool:
+        '''
+        Returns `True` if one of these matches: Employee ID and Email. 
+        
+        Returns `False` if this is a new user.
+
+        This is used to check if the user in the RITM is a duplicate or a new user. The function searches the
+        database and compares the values above to the user in the table, if one exists.
+
+        If any matches, then the user in the table will be edited. If it isn't a match or if `NoSuchElementException` 
+        is thrown, then a new user will be created accordingly.
+        '''
+        self.__switch_frames()
+        self.search_user_list(10)
+        
+        table_body_xpath = '//tbody[@class="list2_body -sticky-group-headers"]'
+
+        try:
+            eid_xpath = self.driver.find_element(By.XPATH, f'{table_body_xpath}//td[11]')
+
+            # ensure that this is a valid employee ID to check. 
+            # often times the ID isn't given and is either 'TBD' or a bunch of '0's.
+            if self.eid != 'TBD' or self.eid.strip('0') != '':
+                if eid_xpath.text == self.eid or eid_xpath.text[0:-1] == self.eid or eid_xpath.text[1:] == self.eid:
+                        print(f'   Employee ID matched! {self.eid}')
+                        time.sleep(1)
+                        return True
+                
+            email_xpath = self.driver.find_element(By.XPATH, f'{table_body_xpath}//td[14]')
+            personal_email_xpath = self.driver.find_element(By.XPATH, f'{table_body_xpath}//td[15]')
+            email_texts = [email_xpath.text, personal_email_xpath.text]
+
+            # ensures this is a valid email before checking it. the email address is
+            # often there 95% of the time. most of the error checking occurs in scrape.py.
+            if self.email != 'TBD' or '@' not in self.email:
+                for email in email_texts:
+                    if self.email.lower() == email.lower():
+                        print(f'   Email address matched! {self.email}')
+                        time.sleep(1)
+                        return True
+            
+            # indicates that the user is a duplicate if the email ID or employee ID are no matches.
+            self.user_name_unique_id += 1
+        except NoSuchElementException:
+            # indicates that there is no existing user in the database.
+            pass
+    
+        return False
+
     # fills in username (first.last@teksystemsgs.com), and their personal email.
     def __send_email_keys(self):
         '''
@@ -777,15 +856,7 @@ class UserCreation:
     def __send_org_keys(self):
         '''
         Fills in the project ID, office ID, and company name to the fields during user creation.
-
-        The project ID is checked and fixed depending on certain conditions. If the project ID is critically bad,
-        such as the total length > 11 or there is no project ID, then the RITM is blacklisted.
-
-        The office ID is formatted here using a class method, which also initializes two different attributes
-        office ID and office location since the input will always contain "00000 - Dallas, Texas".
         '''
-        if self.org == 'GS':
-            self.__format_project_id()
         self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.pid)
       
         time.sleep(.5)
@@ -820,64 +891,3 @@ class UserCreation:
 
         # name keys will always be the first and last name, regardless of X middle names.
         return name[0], last_name
-    
-    def __format_project_id(self):
-        '''
-        Checks the project ID and converts it to the correct format.
-
-        Project IDs must be 10-11 characters long and must contain four 0s at the front of the project ID.
-
-        In case of very bad errors, such as length > 11 or no project ID, then the RITM will be blacklisted.
-        '''
-        pid = self.pid
-        # first 4 digits must be '0' / the remaining digits must be between 5 to 6 characters in length.
-        pid_prefix = re.compile(r'^([0]{4})$')
-        pid_suffix = re.compile(r'^([0-9]{5,6})$')
-        counter = 0
-
-        # if length of the pid is 11, highly likely it is 5 zeroes and 6 digits, remove an extra 0.
-        if len(pid) == 11:
-            five_zero_count = 0
-
-            for char in pid:
-                if char == '0':
-                    five_zero_count += 1
-                    if five_zero_count == 5:
-                        self.pid = pid.replace('0', '', 1)
-                        break
-                else:
-                    break
-
-        if pid_prefix.match(pid[:4]):
-            if pid_suffix.match(pid[4:]):
-                self.pid = pid
-            else:
-                # TODO: ADD A CUSTOM EXCEPTION.
-                raise NoSuchElementException
-        else:
-        # counts how many 0s are in the beginning, when a different character is read, break out the loop.
-            if pid_prefix.match(pid[:4]) is None:
-                for char in pid:
-                    if char == '0':
-                        counter += 1
-                        if counter == 4:
-                            break
-                    else:
-                        break
-                        
-                # append X zeroes to the beginning if they are missing.
-                difference = 4 - counter
-                text = 'zeroes'
-                if difference <= 1:
-                    text = 'zero'
-                zeroes = '0' * difference
-                pid = zeroes + pid
-
-                print(f'   Project ID is incorrect, added in {difference} {text}.')
-
-                # check if the last 5-6 digits are correct.
-                if pid_suffix.match(pid[4:]):
-                    self.pid = pid
-                else:
-                    # TODO: ADD A CUSTOM EXCEPTION.
-                    raise NoSuchElementException
