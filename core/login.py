@@ -9,6 +9,9 @@ class Login:
         self.pw = pw
     
     def login_sn(self):
+        '''
+        Login into SNOW.
+        '''
         self.driver.get(self.link)
 
         time.sleep(5)
