@@ -4,7 +4,7 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import ElementClickInterceptedException
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import time
+import time, re
 
 class ScrapeRITM:
     def __init__(self, driver, ritm: str):
@@ -88,7 +88,7 @@ class ScrapeRITM:
             part = element_xpath.get_attribute("value")
 
             # checks if the name field has something else other than
-            # the name itself, such as C/O XX XX. should rarely be true.
+            # the name itself, such as C/O XX XX. should rarely occur.
             if len(part.split()) > 3:
                 split_part = part.split()
                 part = split_part[0]
@@ -244,6 +244,7 @@ class ScrapeRITM:
             pid_xpath = '//tr[7]//input[@class="cat_item_option sc-content-pad form-control"]'
         
             pid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{pid_xpath}").get_attribute("value")
+            pid = self.__format_project_id(pid)
     
         if org ==  'Staffing':
             pid = 'TEKSTAFFING'
@@ -259,6 +260,9 @@ class ScrapeRITM:
         return pid
 
     def __scrape_customer_id(self) -> str:
+        '''
+        Scrape the customer ID. Takes into account of new HTML fields if a company doesn't exist.
+        '''
         # these two are options that when chosen, will change the xpath of the CID, from [19] to [22].
         customer_id_values = ["New Customer", "Not Listed"]
 
@@ -270,12 +274,12 @@ class ScrapeRITM:
         if cid in customer_id_values:
             cid_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
             cid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value")
-
         # takes into account of idiots (like JW) who put the company name in the CID field.
         # this should very rarely ever be seen, but more idiot-proof code is better.
-        if not cid.isdigit():
+        elif not cid.isdigit():
             cid_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
             cid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value")
+            
 
         return cid
     
@@ -325,14 +329,18 @@ class ScrapeRITM:
         email_xpath = '//tr[3]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
         email = self.driver.find_element(By.XPATH, f"{self.consultant_info_xpath}{email_xpath}").get_attribute("value")
         
+        # if for whatever reason the email address does not have an @- indicator that this is a bad input.
+        if '@' not in email:
+            return 'TBD'
+        
         return self.__validate_string(email)
     
     def __scrape_employee_id(self) -> str:
         eid_xpath = '//tr[4]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
-        eid = self.driver.find_element(By.XPATH, f"{self.consultant_info_xpath}{eid_xpath}").get_attribute("value")
+        eid = self.driver.find_element(By.XPATH, f"{self.consultant_info_xpath}{eid_xpath}").get_attribute("value").strip()
 
         # if EID is not a valid input then leave it as TBD.
-        if not eid.isdigit() or eid.strip('0') == '':
+        if not eid.isdigit() or eid.strip(eid[0]) == '':
             eid = 'TBD'
 
         return eid
@@ -385,10 +393,69 @@ class ScrapeRITM:
         bad_list = [pos for pos in range(len(string)) if string[pos] in bad_chars]
         if bad_list:
             for char in bad_chars:
-                string = string.replace(char, ' ')
+                string = string.replace(char, '')
             
+            # checks if a space exists in the beginning of the input, if it does then
+            # the string will start on index after the space.
             pos = string.find(' ')
             if pos != -1:
                 string = string[pos:]
         
         return string.strip()
+    
+    def __format_project_id(self, pid):
+        '''
+        Checks the project ID and converts it to the correct format.
+
+        Project IDs must be 10-11 characters long and must contain four 0s at the front of the project ID.
+
+        In case of very bad errors, such as length > 11 or no project ID, then the RITM will be blacklisted.
+        '''
+        # first 4 digits must be '0' / the remaining digits must be between 5 to 6 characters in length.
+        pid_prefix = re.compile(r'^([0]{4})$')
+        pid_suffix = re.compile(r'^([0-9]{5,6})$')
+        counter = 0
+
+        # if length of the pid is 11, highly likely it is 5 zeroes and 6 digits, remove an extra 0.
+        if len(pid) == 11:
+            five_zero_count = 0
+
+            for char in pid:
+                if char == '0':
+                    five_zero_count += 1
+                    if five_zero_count == 5:
+                        pid = pid.replace('0', '', 1)
+                        break
+                else:
+                    break
+
+        if pid_prefix.match(pid[:4]):
+            if pid_suffix.match(pid[4:]):
+                return pid
+            else:
+                # TODO: ADD A CUSTOM EXCEPTION.
+                raise NoSuchElementException
+        else:
+            # counts how many 0s are in the beginning, when a different character is read, break out the loop.
+            if pid_prefix.match(pid[:4]) is None:
+                for char in pid:
+                    if char == '0':
+                        counter += 1
+                        if counter == 4:
+                            break
+                    else:
+                        break
+                        
+                # append X zeroes to the beginning if they are missing.
+                difference = 4 - counter
+                text = 'zeroes'
+                if difference <= 1:
+                    text = 'zero'
+                zeroes = '0' * difference
+                pid = zeroes + pid
+
+                print(f'   Project ID is incorrect, added in {difference} {text}.')
+
+                # check if the last 5-6 digits are correct.
+                if pid_suffix.match(pid[4:]):
+                    return pid
