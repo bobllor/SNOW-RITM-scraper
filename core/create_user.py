@@ -10,8 +10,7 @@ import time, re
 
 # NOTE: still requires manual input if something goes wrong.
 class UserCreation:
-    '''
-    Create the user and add them into the Service NOW database.
+    '''Create the user and add them into the Service NOW database.
 
     Checks and handles for any errors that can occur during the process.
 
@@ -47,27 +46,34 @@ class UserCreation:
         # bool to check if a user already exists, then modify the user instead of creating a new one.
         # by default it is False- meaning that it should attempt to create a new user every time.
         self.existing_user = False
+
         # used to stop a recursion issue, this only applies in one very specific circumstance.
         self.loop_once = False
+
         # prevent multiple companies creation, which is either temp or permanent-
         # depending on if i want to find a solution. for now, it will raise an exception.
         self.company_created = False
+
         # issue with the company field inside the creation of a new pid, this triggers a new step in the process.
         self.pid_error = False
+
         # used to prevent an infinite loop inside the new user creation. if two errors show up at the same time,
         # the error message at the top of the page will not go away and cause an infinite loop.
         # when > 3, an exception will be thrown and blacklist the RITM.
         self.error_counter = 0
+
         # this is set to true when fill_user is executed, due to a recursion issue after creating a unique
         # user, the program goes back to save_user and breaks the program. this prevents the issue from occuring.
         self.prevent_save_user = False
+
         # used for `fill_user` to stop the process of filling in the user if all existing values match the RITM values.
         self.stop = False
 
     def __switch_frames(self):
-        '''
-        Attempt to switch to the iframe, if available. 
-        If there are no iframes available, then it will remain in the default frame state.
+        '''Switches to the *iframe* of the page.
+
+        If no iframes exist on the current page, a `TimeoutException` is thrown, which is handled
+        and keeps the driver on the default frame.
         '''
         self.driver.switch_to.default_content()
         try:
@@ -78,13 +84,12 @@ class UserCreation:
             pass
 
     def create_user(self):
-        '''
-        Creates the user to add in SNOW's database.
+        '''Creates the user from the RITM and adds them in the SNOW's database.
 
         Checks if the user exists first by searching by their email address. 
         
         If an email address does not exist, then a new user will be created. 
-        Otherwise, the user will be edited in the database table.
+        Otherwise, the user will be edited in the table directly.
         '''
         # check_user_list returns true/false, existing user/new user.
         if self.__check_user_list() and not self.existing_user:
@@ -96,16 +101,15 @@ class UserCreation:
             errors = self.save_user()
 
             if not errors and not self.existing_user:
-                self.search_user_list(18)
+                self.search_user_list(time_to_wait=18)
                 self.fill_user()
         
         print("\n   User created. Please check the information before continuing.")
         self.driver.switch_to.default_content()
 
     def __create_user_fill_info(self):
-            '''
-            Method to fill out the required fields when creating a new user on the user creation page.
-            '''
+            '''Fills the required fields during the creation of a new user on the New User page.'''
+
             self.driver.get(self.link)
             time.sleep(3)
             self.__switch_frames()
@@ -120,10 +124,8 @@ class UserCreation:
 
             time.sleep(2)
 
-
     def save_user(self) -> bool:
-        '''
-        Saves the user on the user creation page.
+        '''Saves the new user on the New User page.
 
         This checks for any errors that pop up during the user creation process.
 
@@ -135,7 +137,7 @@ class UserCreation:
 
             # check for initial errors (company and pid errors).
             time.sleep(1)
-            errors = self.__user_error_msg_check()
+            errors = self.__user_error_msg_company_pid()
             time.sleep(1)
             if errors:
                 self.__check_errors(errors)
@@ -154,7 +156,7 @@ class UserCreation:
                 # non-duplicate users will go through the process as normal.
                 if self.existing_user is False:
                     self.save_user()
-                    self.search_user_list(18)
+                    self.search_user_list(time_to_wait=18)
                     self.fill_user()
             
             if not errors and self.existing_user is False:
@@ -163,9 +165,8 @@ class UserCreation:
         return True
     
     def __save_user_save_btn(self) -> None:
-        '''
-        Presses the save button inside the "Create New User" page.
-        '''
+        '''Clicks on the save button inside the New User page.'''
+
         save_btn_xpath = '//button[@id="sysverb_insert_and_stay"]'
         self.__switch_frames()
 
@@ -175,6 +176,8 @@ class UserCreation:
         save_btn.click()
 
     def __check_errors(self, errors: list):
+        '''Used to check for any errors in the New User page, and calls the relevant method to handle the error.'''
+
         for error in errors:
                 if 'Unique Key violation detected by database' in error:
                     # either a new user will be created or the existing user is updated, both of which
@@ -195,13 +198,26 @@ class UserCreation:
                     print('   Searching the project ID list.')
                     self.error_project_id()
 
-    def search_user_list(self, time_to_wait: int):
-        '''
-        Search for the user using their unique username.
+    def search_user_list(self, *, time_to_wait: int = 20, search_by_user: bool = False):
+        """Searches for the user in the database.
 
-        Takes an int as a parameter for how much time to wait.
-        '''
-        # this is used to prevent some recursion issue.
+        Parameters
+        ----------
+
+        ``time_to_wait``: int
+
+        (optional) The number of seconds before attempting to search for the user. Default is 20.
+
+        ``search_by_user``: bool
+
+        (optional) A flag to search for the user by personal email (False) or by username (True). Default is False.
+        """
+        if not isinstance(time_to_wait, int):
+            raise TypeError(f'Expected an integer for time_to_wait, but got {type(time_to_wait).__name__}.')
+        if not isinstance(search_by_user, bool):
+            raise TypeError(f'Expected a bool for search_by_user, but got {type(search_by_user).__name__}.')
+
+        # this is used to prevent some recursion issue. i don't remember why and where it happened.
         if self.loop_once is False:
             user_link = 'https://tek.service-now.com/nav_to.do?uri=%2Fsys_user_list.do%3Fsysparm_clear_stack%3Dtrue%26sysparm_userpref_module%3D62354a4fc0a801941509bc63f8c4b979'
 
@@ -216,7 +232,11 @@ class UserCreation:
             time.sleep(time_to_wait)
             user_search = self.driver.find_element(By.XPATH, search)
 
-            user_search.send_keys(self.email)
+            if not search_by_user:
+                user_search.send_keys(self.email)
+            else:
+                user_search.send_keys(self.user_name)
+
             time.sleep(1)
             user_search.send_keys(Keys.ENTER)
 
@@ -225,18 +245,15 @@ class UserCreation:
 
     # used for both filling and checking the user information.        
     def fill_user(self):
-        '''
-        Fills in the user cells after searching up the user in the database.
-        '''
+        '''Edits the table cells for the current user once a search is completed.'''
+
         # this is used to prevent some recursion issue.
         if self.loop_once is False:
-            #self.prevent_save_user = True
-            
             self.__switch_frames()
-            # indicate to stop this function from executing its main loop, 
 
             keys_to_send = [self.cid, self.oid, self.oid, self.oid_location, self.div]
             user_cell_xpath = '//tr[@record_class="sys_user"]'
+
             # cell positions: 5* 6 7 8 9 10
             # PID*, CID, OID, OID, office location, division
             # *only used if duplicate user is true- it gets inserted later.
@@ -252,9 +269,9 @@ class UserCreation:
                         element = WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.XPATH, path)))
                         break
                     except TimeoutException:
-                        self.driver.refresh()
+                        self.search_user_list(time_to_wait=10)
 
-                        if attempts == 5:
+                        if attempts > 5:
                             raise AttemptsException
                         attempts += 1
                         
@@ -265,8 +282,7 @@ class UserCreation:
             if self.existing_user:
                 self.__check_cell_values(keys_to_send, elements_obj)
             else:
-                # remove oid/3rd element as it is filled during the user creation.
-                # only applicable if this is not an existing user.
+                # remove oid/3rd element due to the existing user already having this value.
                 del keys_to_send[2]
                 del elements_obj[2]
             
@@ -277,12 +293,10 @@ class UserCreation:
             count = 0
             repeat_attempts = 0
             while count < len(keys_to_send) and repeat_attempts != 3 and not self.stop:
-                # try block is used to keep trying in case an error occurs 
-                # during the attempt to fill a status cell in, max 3 repeats.
                 try:
                     print(f'   Inserting {keys_to_send[count]}...')
-                    # used only for duplicate users due to changing the PID cell.
-                    if count == 0:
+                    # used only for duplicate users, they have an additional PID to potentially modify.
+                    if self.pid == keys_to_send[count]:
                         ActionChains(self.driver).click(elements_obj[count]).perform()
                         time.sleep(.5)
                         ActionChains(self.driver).send_keys(Keys.ARROW_RIGHT).perform()
@@ -316,6 +330,12 @@ class UserCreation:
                 except NoSuchElementException:
                     repeat_attempts += 1
                     print(f'   Failed inserting {keys_to_send[count]}. Attempting to fill again.')
+                    
+                    # in the case that the first two attempts do not work, refresh the page and try again.
+                    if repeat_attempts < 3:
+                        self.driver.refresh()
+                        time.sleep(5)
+
                     time.sleep(1)
                 
             # initialized by the constructor, checks if the company is a blanket admin.
@@ -345,19 +365,19 @@ class UserCreation:
         
             self.driver.switch_to.default_content()
 
-    def __check_cell_values(self, keys_to_send, elements_obj) -> None:
-        '''
-        Checks the user cell values in the database table for any mismatching values.
+    def __check_cell_values(self, keys_to_send: list, elements_obj: list) -> None:
+        '''Checks the user cell values in the database table for any mismatching values.
         
         Has two parameters:
             1. `keys_to_send` is a list of keys that are the values entered to the cells.
             2. `elements_obj` is a list of elements object xpaths of the cell in the table.
 
         It modifies the list `keys_to_send` and `elements_obj` to add and remove cells based on matching values.
-        Passes by reference for the two arguments.
+        Returns None, as it uses pass by reference to modify the two lists.
 
-        This only applies on duplicate users or if a user exists in the database already.
+        This only method is only called if a duplicate user error appears.
         '''
+
         # xpath for where the child user cells are located.
         user_cell_xpath = '//tbody[@class="list2_body -sticky-group-headers"]'
         # initialized below, defined here to prevent an exception in a later loop if a condition isn't met.
@@ -400,19 +420,27 @@ class UserCreation:
                 pid_cell_element = self.driver.find_element(By.XPATH, f'{user_cell_xpath}//td[4]')
                 elements_obj[0] = pid_cell_element
 
-    def __user_error_msg_check(self):
-        '''
-        Looks for any error messages that pop up due to a bad input when creating the user.
+    def __user_error_msg_company_pid(self) -> list:
+        '''Checks for *Company* and *Project ID* error messages on the New User page.
 
-        Following mandatory fields: bad company name, either it does not exist or SNOW is being bad.
-        Unique key violation: a user already exists with the username.
-        Invalid email: bad email, not sure why this happens.
-        Invalid update: bad project ID, either it does not exist or SNOW is being bad.
+        Errors
+        ------
+
+        These errors appear before saving the user.
+
+        Two ways both the messages can occur:
+            1. The company/project ID does not exist in the system.
+            2. An issue with SNOW's database, sometimes it cannot recognize the input.
+        
+        Methods `error_invalid_company` and `error_project_id` handle the errors respectively.
+        
+        Returns
+        -------
+
+        Returns an empty `list` if no errors were found or a `list` with the error messages attached.
         '''
-        error_list = ['The following mandatory fields are not filled in: Company',
-                      'Unique Key violation detected by database',
-                      'Invalid email address',
-                      'Invalid update']
+        error_list = ('The following mandatory fields are not filled in: Company',
+                      'Invalid update')
         errors = []
 
         # check if an invalid message is below the company fields.
@@ -432,6 +460,31 @@ class UserCreation:
                 errors.append(error_list[-1])
         except NoSuchElementException:
             pass
+
+        return errors
+
+    def __user_error_msg_check(self) -> list:
+        '''Checks for *Duplicate User* and *Invalid Email Address* that appear on the New User page.
+        
+        Errors
+        ------
+
+        Both the errors only appear after saving the user once.
+
+        \"Duplicate user\": A user with the same username already exists inside the database.
+
+        \"Invalid email\": Unable to validate the email address, this is handled by SNOW and cannot be changed.
+
+        Methods `error_duplicate_key` and `error_invalid_email` handle the errors respectively.
+
+        Returns
+        -------
+
+        Returns an empty `list` if no errors were found or a `list` with the error messages attached.
+        '''
+        error_list = ['Unique Key violation detected by database',
+                      'Invalid email address',]
+        errors = []
         
         elements = []
         for count, error in enumerate(error_list):
@@ -453,8 +506,7 @@ class UserCreation:
         return errors
 
     def error_duplicate_key(self):
-        '''
-        Unique key violation, this error is a warning that a user already exists with the current username.
+        '''Unique key violation, this error is a warning that a user already exists with the current username.
 
         Continuing on the previous method of creating the user, which searches the database for the personal email address of the user.
         It will increment the username unique ID, refresh the user creation page, and repeat the process.
@@ -477,8 +529,7 @@ class UserCreation:
             max_attempts += 1
 
     def error_invalid_company(self):
-        '''
-        Invalid company error that occurs during the user creation process.
+        '''Invalid company error that occurs during the user creation process.
 
         There are two reasons why this issue occurs:
             1. The company name does not exist inside the database.
@@ -509,18 +560,6 @@ class UserCreation:
 
         # begin the process of searching, selecting, and create (if applicable) the company.
         self.driver.switch_to.default_content()
-
-        '''company_search_button = self.driver.find_element(By.XPATH, '//span[@id="core_company_hide_search"]//input[@type="search"]')
-        
-        # search the company name in the search bar
-        company_search_button.send_keys(Keys.CONTROL + 'a')
-        time.sleep(.5)
-        company_search_button.send_keys(Keys.DELETE)
-        time.sleep(.5)
-        company_search_button.send_keys(self.company.lower())
-        time.sleep(.5)
-        company_search_button.send_keys(Keys.ENTER)
-        time.sleep(3)'''
 
         company_list = self.driver.find_elements(By.XPATH, f'{company_table}{company_name}')
 
@@ -565,22 +604,20 @@ class UserCreation:
     
     # INVALID PROJECT ID, select the project ID from the list or create a new one.
     def error_project_id(self):
-        '''
-        Invalid project ID error that occurs during the user creation process.
+        '''An invalid project ID error message is detected.
 
-        There are three reasons why this issue occurs:
+        There are two errors that cause the message:
             1. The project ID does not exist inside the database.
-            2. There is some issue with the autofilling of the project ID.
+            2. There is some issue with the autofilling of the project ID, which is a problem with SNOW's servers.
 
-        Incorrect project IDs are corrected using a class method. If the project ID is very bad, as in the length
-        of the ID is over 11 or if there is no project ID, then an exception is raised and the RITM is blacklisted.
+        In order to correct the error a new window is opened that consists of a table of project IDs only.
+        A search is performed on the table to find the correct project ID, or create a new one if it doesn't exist.
         
-        In any case, the list of project IDs is opened and a matching ID will be selected if it is an exact match.
-
-        If the project ID does not exist, then a new project ID will be created. This process requires additional
-        steps, which requires 6 inputs: project ID, requestor, date created, company name, division, and allocation.
-        
-        Afterwards, the same method will be called to select the correct project ID.
+        The fix is broken into two parts:
+            1. If the project ID is found in the table, then the project ID is selected.
+            2. If the project ID is not found, a series of steps are taken to create a new project ID.
+            These steps require the *project ID*, *requestor/CSA email address*, *organization*, and *division number* from the RITM.
+            After creation, the method calls itself to select the created project ID.
         '''
         default_window = self.driver.current_window_handle
 
@@ -703,12 +740,9 @@ class UserCreation:
             self.error_project_id()
     
     def error_invalid_email(self):
-        '''
-        Bad email address error during the user creation process.
+        '''Bad email address error during the user creation process.
 
-        This will occur due to a bad input from the requestor inside the RITM ticket.
-
-        If this is detected, then the user's unique username is used instead.
+        If this error is found, then the user's unique username is used instead.
         '''
         # change the user's email to the username instead.
         self.email = self.user_name
@@ -724,9 +758,8 @@ class UserCreation:
         self.save_user()
     
     def __send_consultant_keys(self):
-        '''
-        Fills in the first name, last name, and employee ID to the fields during user creation.
-        '''
+        '''Used to fill in the fields for first name, last name, and employee ID during user creation.'''
+
         self.driver.find_element(By.ID, "sys_user.first_name").send_keys(self.name[0])
         time.sleep(1)
         self.driver.find_element(By.ID, "sys_user.last_name").send_keys(self.name[1])
@@ -742,18 +775,18 @@ class UserCreation:
         time.sleep(3)
     
     def __check_user_list(self) -> bool:
-        '''
-        Returns `True` if one of these matches: Employee ID and Email. 
-        
-        Returns `False` if this is a new user.
-
-        This is used to check if the user in the RITM is a duplicate or a new user. The function searches the
-        database and compares the values above to the user in the table, if one exists.
+        '''Checks if the user in the table, if they exist, is a duplicate or new user.
 
         If any matches, then the user in the table will be edited. If it isn't a match or if `NoSuchElementException` is thrown, then a new user will be created accordingly.
+        
+        Returns
+        -------
+        `True` if either identifiers matches the user in the table: Employee ID and Email. 
+        
+        `False` if `NoSuchElementException` is thrown, the user does not exist in the database.
         '''
         self.__switch_frames()
-        self.search_user_list(10)
+        self.search_user_list(time_to_wait=10)
         
         table_body_xpath = '//tr[@record_class="sys_user"]'
 
@@ -787,14 +820,14 @@ class UserCreation:
     
         return False
 
-    # fills in username (first.last@teksystemsgs.com), and their personal email.
     def __send_email_keys(self):
-        '''
-        Fills in the username (first.last@teksystemsgs.com) and the personal email address 
-        to the fields during user creation.
+        '''Fills in the username and personal email address fields during user creation.
 
-        In case of a bad email input, such as TBD or an empty input, then the username is used
-        in place of the personal email address.
+        The username follows the format first.last@teksystemsgs.com. In case of a duplicate user, the `self.user_name_unique_id`
+        is incremented and appended to the last name to differentiate multiple users with the same name.
+
+        If the username is a bad email input (before the error is detected), if the input does not contain an email with an \"@\",
+        then the username is used in place of the personal email address.
         '''
         f_name, l_name = self.__name_keys()
 
@@ -823,8 +856,7 @@ class UserCreation:
         time.sleep(.5)
 
     def __send_org_keys(self):
-        '''
-        Fills in the project ID, office ID, and company name to the fields during user creation.
+        '''Fills in the fields for project ID, office ID, and company name during user creation.
         '''
         self.driver.find_element(By.ID, "sys_display.sys_user.u_project_id").send_keys(self.pid)
       
@@ -837,9 +869,7 @@ class UserCreation:
         self.driver.find_element(By.ID, 'sys_display.sys_user.company').send_keys(self.company)
     
     def __name_keys(self):
-        '''
-        Method used to ensure the first and last name will always be the first and last name
-        if the user contains multiple names (i.e. John Doe Smith).
+        '''Formats the first and last name in case of multiple names, or if a suffix is found in the last name.
 
         Dashes ("-") are accounted for to properly parse the name.
         '''
