@@ -489,10 +489,7 @@ class UserCreation:
         elements = []
         for count, error in enumerate(error_list):
             try:
-                if count == 0:
-                    error_ele = self.driver.find_element(By.XPATH, f'//span[contains(text(), "{error}")]')
-                else:
-                    error_ele = self.driver.find_element(By.XPATH, f'//div[contains(text(), "{error}")]')
+                error_ele = self.driver.find_element(By.XPATH, f'//div[contains(text(), "{error}")]')
                 elements.append(error_ele)
             except NoSuchElementException:
                 pass
