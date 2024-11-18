@@ -338,7 +338,6 @@ class ScrapeRITM:
         if '@' not in email:
             return 'TBD'
         
-        print(email)
         return self.__validate_string(email)
     
     def __scrape_employee_id(self) -> str:
