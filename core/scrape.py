@@ -4,7 +4,7 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import ElementClickInterceptedException
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import time, re
+import time, re, string
 
 class ScrapeRITM:
     def __init__(self, driver, ritm: str):
@@ -140,7 +140,7 @@ class ScrapeRITM:
 
     def scrape_requestor(self) -> str:
         '''
-        REturns the requestor's email address, this is used for creating new project IDs when an error shows up.
+        Returns the requestor's email address, this is used for creating new project IDs when an error shows up.
         '''
         self.driver.find_element(By.XPATH, '//button[@name="viewr.sc_req_item.request.requested_for"]').click()
         time.sleep(1)
@@ -274,6 +274,11 @@ class ScrapeRITM:
         if cid in customer_id_values:
             cid_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
             cid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value")
+        # this is a major issue in regards to NM idiots, who decide to put N/A for the CID and still provide the CID. (i.e. 'company - 111111').
+        # this addresses the issue by using regex to extract the CID from the field.
+        # when N/A is used in the field, no new field is created.
+        elif cid == 'N/A':
+            pass
         # takes into account of idiots (like JW) who put the company name in the CID field.
         # this should very rarely ever be seen, but more idiot-proof code is better.
         elif not cid.isdigit():
@@ -333,6 +338,7 @@ class ScrapeRITM:
         if '@' not in email:
             return 'TBD'
         
+        print(email)
         return self.__validate_string(email)
     
     def __scrape_employee_id(self) -> str:
@@ -376,7 +382,7 @@ class ScrapeRITM:
 
         return oid, oid_location
 
-    def __validate_string(self, string: str) -> str:
+    def __validate_string(self, word: str) -> str:
         '''
         Validates a string, removes any unwanted characters from a string.
         '''
@@ -385,23 +391,26 @@ class ScrapeRITM:
 
         # checks for any escape characters in the string.
         # if an escape character is found, start the string at the position of the escape char.
-        pos_list = [pos for pos in range(len(string)) if string[pos] in escape_chars]
-        if pos_list:
-            string = string[pos_list[0]:]
+        if word[0] in string.ascii_letters:
+            return word.strip().strip('\t')
+        else:
+            pos_list = [pos for pos in range(len(word)) if word[pos] in escape_chars]
+            if pos_list:
+                word = word[pos_list[0]:]
 
-        # checks for any blacklisted characters in the string.
-        bad_list = [pos for pos in range(len(string)) if string[pos] in bad_chars]
-        if bad_list:
-            for char in bad_chars:
-                string = string.replace(char, '')
+            # checks for any blacklisted characters in the string.
+            bad_list = [pos for pos in range(len(word)) if word[pos] in bad_chars]
+            if bad_list:
+                for char in bad_chars:
+                    word = word.replace(char, '')
+                
+                # checks if a space exists in the beginning of the input, if it does then
+                # the string will start on index after the space.
+                pos = word.find(' ')
+                if pos != -1:
+                    word = word[pos:]
             
-            # checks if a space exists in the beginning of the input, if it does then
-            # the string will start on index after the space.
-            pos = string.find(' ')
-            if pos != -1:
-                string = string[pos:]
-        
-        return string.strip()
+        return word.strip()
     
     def __format_project_id(self, pid):
         '''
