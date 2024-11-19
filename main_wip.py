@@ -1,18 +1,16 @@
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from core.login import Login
-from core.scrape import ScrapeRITM
-from core.create_user import UserCreation
-from core.vtb_scanner import VTBScanner
 from components.acc import get_accs
 from components.links import Links
 from selenium.common.exceptions import NoSuchFrameException, NoSuchElementException 
 from selenium.common.exceptions import ElementClickInterceptedException
 from misc.cust_except import AttemptsException
 from gui.table import TableGUI
-from selections import manual_user_creation
+from functions.manual import ManualRITM
 import misc.text_formats, misc.timing
-import os, time, traceback, random
+import misc.menu as menu
+import os, traceback
 
 from log import logger
 
@@ -34,17 +32,31 @@ if __name__ == '__main__':
 
     while True:
         try:
-            manual_user_creation(driver)
+            menu.display_main_menu()
+            menu_choice = menu.main_menu_choice()
+            
+            if menu_choice == 'a':
+                print('WIP sorry!')
+
+            if menu_choice == 'm':
+                man = ManualRITM(driver)
+                menu.display_manual_menu()
+                manual_choice = menu.manual_choice()
+
+                if manual_choice == 'm':
+                    # single file input.
+                    man.manual_input()
+                if manual_choice == 'f':
+                    # uses a csv/xlsx input to get a list of RITMs.
+                    man.file_input()
+
         except (NoSuchElementException, NoSuchFrameException):
             print('\n   CRITICAL ERROR: Something went wrong during the process. The error has been logged.')
             logger(traceback.format_exc())
         except AttemptsException:
             print('\n   ERROR: Too many attempts were repeated, the RITM is blacklisted.')
-            # the error will be logged, this will be looked at.
             logger(traceback.format_exc())
         except ElementClickInterceptedException:
             print('\n   ERROR: Something went wrong during the process. Please try again.')
-        except KeyboardInterrupt:
-            print('Operation canceled.')
-            time.sleep(1.5)
-        
+        except TypeError as e:
+            print(f'\n   {e}')
