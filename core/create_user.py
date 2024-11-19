@@ -634,15 +634,6 @@ class UserCreation:
         project_table = '//tbody[@class="list2_body -sticky-group-headers"]'
         project_id = '//a[@role="button"]'
 
-        search_container = '//div[@role="search"]'
-        search_xpath = f'{search_container}/input[@type="search"]'
-
-        search = self.driver.find_element(By.XPATH, search_xpath)
-        search.send_keys(self.pid)
-        time.sleep(.5)
-        search.send_keys(Keys.ENTER)
-        time.sleep(2)
-
         project_list = self.driver.find_elements(By.XPATH, f'{project_table}{project_id}[contains(text(), "{self.pid}")]')
         
         found = False
@@ -688,8 +679,8 @@ class UserCreation:
                 time.sleep(.5)
                 company_field.click()
                 time.sleep(.5)
-                ActionChains(self.driver).send_keys(Keys.ARROW_DOWN).send_keys(Keys.ENTER).perform()
-                time.sleep(.5)
+            ActionChains(self.driver).send_keys(Keys.ARROW_DOWN).send_keys(Keys.ENTER).perform()
+            time.sleep(.5)
 
             allocation_field_xpath = '//select[@id="u_projects.u_allocation"]'
             if self.org == 'GS':

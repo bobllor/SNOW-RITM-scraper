@@ -54,7 +54,6 @@ class ScrapeRITM:
             time.sleep(5)
             self.search_ritm()
 
-    # NOTE: this function alone can be used to generate a label with my FedEx label program.
     def scrape_ritm(self):
         #self.driver.switch_to.frame("gsft_main")
 
@@ -243,7 +242,7 @@ class ScrapeRITM:
         if org == 'GS':
             pid_xpath = '//tr[7]//input[@class="cat_item_option sc-content-pad form-control"]'
         
-            pid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{pid_xpath}").get_attribute("value")
+            pid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{pid_xpath}").get_attribute("value").strip()
             pid = self.__format_project_id(pid)
     
         if org ==  'Staffing':
@@ -268,24 +267,29 @@ class ScrapeRITM:
 
         # by default [19] will be the value of CID, assuming that this is an existing company.
         cid_xpath = '//tr[19]//input[@class="questionsetreference form-control element_reference_input"]'
-        cid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value")
+        cid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value").strip()
 
-        # related to above, 
-        if cid in customer_id_values:
-            cid_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
-            cid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value")
-        # this is a major issue in regards to NM idiots, who decide to put N/A for the CID and still provide the CID. (i.e. 'company - 111111').
-        # this addresses the issue by using regex to extract the CID from the field.
-        # when N/A is used in the field, no new field is created.
-        elif cid == 'N/A':
-            pass
-        # takes into account of idiots (like JW) who put the company name in the CID field.
-        # this should very rarely ever be seen, but more idiot-proof code is better.
-        elif not cid.isdigit():
-            cid_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
-            cid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value")
+        # used to remove any invisible escape characters in a customer ID by casting it into an int and back to a str.
+        # an exception is thrown on non-digit values, in which case check for the issue in the catch, otherwise return cid.
+        try:
+            if str(int(cid)).isdigit():
+                pass
+        except ValueError:
+            # related to above, 
+            if cid in customer_id_values:
+                cid_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
+                cid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value")
+            # this is a major issue in regards to NM idiots, who decide to put N/A for the CID and still provide the CID. (i.e. 'company - 111111').
+            # this addresses the issue by using regex to extract the CID from the field.
+            # when N/A is used in the field, no new field is created.
+            elif cid == 'N/A':
+                pass
+            # takes into account of idiots (like JW) who put the company name in the CID field.
+            # this should very rarely ever be seen, but more idiot-proof code is better.
+            elif not cid.isdigit():
+                cid_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
+                cid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value")
             
-
         return cid
     
     def __scrape_office_id(self) -> str:
