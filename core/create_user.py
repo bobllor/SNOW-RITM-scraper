@@ -39,6 +39,11 @@ class UserCreation:
 
         # initialized in a future function call, this is necessary because of potential duplicate users.
         self.user_name = ""
+        
+        # initialized in create_user method.
+        self.f_name = ''
+        self.l_name = ''
+
         # used for duplicate keys, increments by 1 if the new user is unique.
         # NOTE: the first duplicate user starts at 1.
         self.user_name_unique_id = 0
@@ -92,6 +97,9 @@ class UserCreation:
         Otherwise, the user will be edited in the table directly.
         '''
         # check_user_list returns true/false, existing user/new user.
+        self.f_name, self.l_name = self.__name_keys()
+        self.user_name = f'{self.f_name}.{self.l_name}@teksystemsgs.com'
+
         if self.__check_user_list() and not self.existing_user:
             self.existing_user = True
             self.fill_user()
@@ -233,7 +241,15 @@ class UserCreation:
             user_search = self.driver.find_element(By.XPATH, search)
 
             if not search_by_user:
-                user_search.send_keys(self.email)
+                if self.email != 'TBD':
+                    user_search.send_keys(self.email)
+                else:
+                    # if email is TBD, then search by employee ID.
+                    if self.eid != 'TBD':
+                        user_search.send_keys(self.eid)
+                    else:
+                        # if employee ID is TBD, then search by user name.
+                        user_search.send_keys(self.user_name)
             else:
                 user_search.send_keys(self.user_name)
 
@@ -817,13 +833,9 @@ class UserCreation:
         If the username is a bad email input (before the error is detected), if the input does not contain an email with an \"@\",
         then the username is used in place of the personal email address.
         '''
-        f_name, l_name = self.__name_keys()
-
-        if self.user_name_unique_id == 0:
-            self.user_name = f'{f_name}.{l_name}@teksystemsgs.com'
         # if the unique ID is > 0, then this is a different user with the same name as an existing one.
         if self.user_name_unique_id > 0:
-            self.user_name = f'{f_name}.{l_name}{str(self.user_name_unique_id)}@teksystemsgs.com'
+            self.user_name = f'{self.f_name}.{self.l_name}{str(self.user_name_unique_id)}@teksystemsgs.com'
 
         user_name_obj = self.driver.find_element(By.ID, "sys_user.user_name")
 
