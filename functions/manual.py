@@ -1,14 +1,10 @@
-from core.create_user import UserCreation
 from core.scrape import ScrapeRITM
 from core.vtb_scanner import VTBScanner
 from components.links import Links
-from selenium import webdriver
 from tkinter import filedialog
 from pathlib import Path
-# remove later, used for debugging only
-from tests.debug import debug_ritm_info
 from . import selections as sel
-import re, os, time
+import re, os
 import pandas as pd
 
 clear: None = lambda: os.system('cls') if os.name == 'nt' else 'clear'
@@ -18,8 +14,8 @@ class ManualRITM:
     Takes an input which is then used to scrape the ticket and creates the user into the SNOW database.
 
     Has two methods:
-        1. ManualRITM.manual_input takes a single RITM input.
-        2. ManualRITM.file_input takes a CSV or XLSX input using filedialog.
+        1. `ManualRITM.manual_input` takes a single RITM input.
+        2. `ManualRITM.file_input` takes a CSV or XLSX input using filedialog.
     '''
     def __init__(self, driver):
         self.driver = driver
@@ -81,7 +77,7 @@ class ManualRITM:
             input("\n   Press 'enter' to return back to menu.")
             clear()
 
-    def file_input(self):
+    def file_input(self) -> list:
         # TODO: allow multiple RITMs in a string, as well as an option to read a csv/xlxs of RITMs.
         # tl;dr: return a list of RITMs which leads to a for loop of all RITMs.
         '''
@@ -92,33 +88,42 @@ class ManualRITM:
         def get_ritms() -> list:
             downloads_path = str(Path.home() / 'Downloads')
             file = filedialog.askopenfilename(initialdir=downloads_path, filetypes=[('Files', '.csv .xlsx')])
+            # initialize it as an empty dataframe, if either the file initialization does not work then exit out back to the menu.
+            df = pd.DataFrame([])
+            
             if Path(file).suffix == '.csv':
                 df = pd.read_csv(file)
-            else:
+            elif Path(file).suffix == '.xlsx':
                 df = pd.read_excel(file)
             
+            # if the df is empty, or the first column is not a column named "number", then return an empty list.
+            if df.empty or list(df.columns)[0] != 'number':
+                return []
+
             return list(df['number'])
 
-        while True:
-            ritms = get_ritms()
+        ritms = get_ritms()
 
-            for ritm in ritms:
-                print(f"\n   Searching for {ritm}...")
-                scraper = ScrapeRITM(self.driver, ritm)
-                scraper.search_ritm()
+        if not ritms:
+            return
 
-                sel.create_user(self.driver, scraper, ritm)
+        for ritm in ritms:
+            print(f"\n   Searching for {ritm}...")
+            scraper = ScrapeRITM(self.driver, ritm)
+            scraper.search_ritm()
 
-                scanner = VTBScanner(self.driver, Links().vtb)
+            sel.create_user(self.driver, scraper, ritm)
 
-                if self.driver.current_url != Links().vtb:
-                    scanner.get_to_vtb()
-                
-                ritm_element = scanner.get_ritm_element(ritm)
+            scanner = VTBScanner(self.driver, Links().vtb)
 
-                if ritm_element:
-                    scanner.drag_task(ritm_element, 'RITM')
-                else:
-                    print(f'{ritm} is not found in the Requests lane.')
+            if self.driver.current_url != Links().vtb:
+                scanner.get_to_vtb()
             
-                clear()
+            ritm_element = scanner.get_ritm_element(ritm)
+
+            if ritm_element:
+                scanner.drag_task(ritm_element, 'RITM')
+            else:
+                print(f'{ritm} is not found in the Requests lane.')
+        
+            clear()
