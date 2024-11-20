@@ -26,7 +26,7 @@ if __name__ == '__main__':
     user, pw = get_accs()
     links = Links()
     login = Login(driver, links.dashboard, user, pw)
-    print("\n   Logging in...")
+    print("\n   Logging in...") 
     login.login_sn()
     clear()
 
@@ -49,6 +49,9 @@ if __name__ == '__main__':
                 if manual_choice == 'f':
                     # uses a csv/xlsx input to get a list of RITMs.
                     man.file_input()
+
+            if menu_choice == 'c':
+                print('WIP sorry!')
 
         except (NoSuchElementException, NoSuchFrameException):
             print('\n   CRITICAL ERROR: Something went wrong during the process. The error has been logged.')

@@ -1,4 +1,6 @@
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import time
 
 class Login:
@@ -13,7 +15,7 @@ class Login:
         Login into SNOW.
         '''
         self.driver.get(self.link)
-
+        wait = WebDriverWait(self.driver, 10)
         time.sleep(5)
         
         # used in case login page is changed due to new SNOW instance.
@@ -22,11 +24,9 @@ class Login:
         except:
             pass
 
-        self.driver.find_element(By.ID, "user_name").send_keys(self.user)
-        time.sleep(3)
-        self.driver.find_element(By.ID, "user_password").send_keys(self.pw)
-        time.sleep(5)
-        self.driver.find_element(By.ID, "sysverb_login").click()
+        wait.until(EC.presence_of_element_located((By.ID, "user_name"))).send_keys(self.user)
+        wait.until(EC.presence_of_element_located((By.ID, "user_password"))).send_keys(self.pw)
+        wait.until(EC.presence_of_element_located((By.ID, "sysverb_login"))).click()
 
         self.driver.switch_to.default_content()
         

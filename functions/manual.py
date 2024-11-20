@@ -78,7 +78,6 @@ class ManualRITM:
             clear()
 
     def file_input(self) -> list:
-        # TODO: allow multiple RITMs in a string, as well as an option to read a csv/xlxs of RITMs.
         # tl;dr: return a list of RITMs which leads to a for loop of all RITMs.
         '''
         Creates users based on the CSV/XLSX input.
@@ -105,7 +104,7 @@ class ManualRITM:
         ritms = get_ritms()
 
         if not ritms:
-            return
+            return []
 
         for ritm in ritms:
             print(f"\n   Searching for {ritm}...")
