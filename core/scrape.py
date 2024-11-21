@@ -94,9 +94,13 @@ class ScrapeRITM:
 
             names.append(part)
         
+        bad_chars = {'<', '>', '`', '\'', ';', ','}
         for index, name in enumerate(names):
             names[index] = name.strip().title()
-        
+            for char in bad_chars:
+                if char in name:
+                    names[index] = name.replace(char, '')
+
         return names
     
     def scrape_address(self) -> list:
@@ -302,7 +306,7 @@ class ScrapeRITM:
         oid = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{oid_xpath}').get_attribute('value')
 
         # Not Listed in the initial field will change the xpaths for the office ID and location/name.
-        if 'Not Listed' in oid:
+        if 'Not Listed' in oid or 'New Office - New Office' in oid:
             oid_xpath = '//tr[25]//input[@class="cat_item_option sc-content-pad form-control"]'
             olocation_xpath = '//tr[26]//input[@class="cat_item_option sc-content-pad form-control"]'
 
