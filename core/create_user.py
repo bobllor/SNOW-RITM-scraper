@@ -241,14 +241,12 @@ class UserCreation:
             user_search = self.driver.find_element(By.XPATH, search)
 
             if not search_by_user:
-                if self.email != 'TBD':
-                    user_search.send_keys(self.email)
+                if self.eid != 'TBD':
+                    user_search.send_keys(self.eid)
                 else:
-                    # if email is TBD, then search by employee ID.
-                    if self.eid != 'TBD':
-                        user_search.send_keys(self.eid)
+                    if self.email != 'TBD':
+                        user_search.send_keys(self.email)
                     else:
-                        # if employee ID is TBD, then search by user name.
                         user_search.send_keys(self.user_name)
             else:
                 user_search.send_keys(self.user_name)
