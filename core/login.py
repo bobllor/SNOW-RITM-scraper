@@ -16,7 +16,6 @@ class Login:
         '''
         self.driver.get(self.link)
         wait = WebDriverWait(self.driver, 10)
-        time.sleep(5)
         
         # used in case login page is changed due to new SNOW instance.
         try:

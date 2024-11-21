@@ -11,7 +11,6 @@ from functions.manual import ManualRITM
 import misc.text_formats, misc.timing
 import misc.menu as menu
 import os, traceback
-
 from log import logger
 
 if __name__ == '__main__':
