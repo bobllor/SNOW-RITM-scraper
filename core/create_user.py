@@ -52,12 +52,12 @@ class UserCreation:
         # by default it is False- meaning that it should attempt to create a new user every time.
         self.existing_user = False
 
+        # used to handle duplicate users if the unique ID > 0. it is set to true when an exception is thrown inside check_user_list.
+        # if an exception was never thrown, that means that username already exists in the database, and the ID increments up until there is none.
+        self.duplicate_user = False
+
         # used to stop a recursion issue, this only applies in one very specific circumstance.
         self.loop_once = False
-
-        # prevent multiple companies creation, which is either temp or permanent-
-        # depending on if i want to find a solution. for now, it will raise an exception.
-        self.company_created = False
 
         # issue with the company field inside the creation of a new pid, this triggers a new step in the process.
         self.pid_error = False
@@ -66,10 +66,6 @@ class UserCreation:
         # the error message at the top of the page will not go away and cause an infinite loop.
         # when > 3, an exception will be thrown and blacklist the RITM.
         self.error_counter = 0
-
-        # this is set to true when fill_user is executed, due to a recursion issue after creating a unique
-        # user, the program goes back to save_user and breaks the program. this prevents the issue from occuring.
-        self.prevent_save_user = False
 
         # used for `fill_user` to stop the process of filling in the user if all existing values match the RITM values.
         self.stop = False
@@ -96,19 +92,44 @@ class UserCreation:
         If an email address does not exist, then a new user will be created. 
         Otherwise, the user will be edited in the table directly.
         '''
-        # check_user_list returns true/false, existing user/new user.
         self.f_name, self.l_name = self.__name_keys()
+        # changed later below if the user is a duplicate.
         self.user_name = f'{self.f_name}.{self.l_name}@teksystemsgs.com'
 
-        if self.__check_user_list() and not self.existing_user:
-            self.existing_user = True
-            self.fill_user()
-        else:
+        # used to loop through the user search list for loop below. maximum of 3 times.
+        loop_max = 1
+        if self.eid != 'TBD':
+            loop_max += 1
+        if self.email != 'TBD':
+            loop_max += 1
+
+        # if checker_user_list is true, then break out after editing the user. if all loops finish, then this is a new user.
+        # this is used to ensure that all 3 types of checks are done (EID, email, username).
+        # the most important variable is self.existing_user = True, which indicates that 1. it is an existing user and 2. prevents the next statement.
+        b = False
+        for i in range(loop_max):
+            if i == loop_max - 1:
+                b = True
+
+            if self.__check_user_list(search_user_name=b):
+                self.fill_user()
+                break
+        
+        # this increments inside check_user_list. the conditions: 1. no exception is thrown & 2. a user with the name exists but isn't a match.
+        if self.user_name_unique_id > 0:
+            while True:
+                self.user_name = f'{self.f_name}.{self.l_name}{str(self.user_name_unique_id)}@teksystemsgs.com'
+
+                if self.__check_user_list(search_user_name=True):
+                    self.fill_user()
+                    break
+
+        if not self.existing_user:
             self.__create_user_fill_info()
 
             errors = self.save_user()
 
-            if not errors and not self.existing_user:
+            if not errors:
                 self.search_user_list(time_to_wait=18)
                 self.fill_user()
         
@@ -119,7 +140,7 @@ class UserCreation:
             '''Fills the required fields during the creation of a new user on the New User page.'''
 
             self.driver.get(self.link)
-            time.sleep(3)
+            time.sleep(1)
             self.__switch_frames()
 
             self.__send_consultant_keys()
@@ -130,8 +151,6 @@ class UserCreation:
 
             self.driver.find_element(By.XPATH, '//input[@id="sys_user.first_name"]').click()
 
-            time.sleep(2)
-
     def save_user(self) -> bool:
         '''Saves the new user on the New User page.
 
@@ -139,36 +158,34 @@ class UserCreation:
 
         Uses a class method to obtain the list of errors to check.
         '''
-        # used to prevent a recursion issue, check the constructor for more details.
-        if not self.prevent_save_user:
-            self.__switch_frames()
+        self.__switch_frames()
 
-            # check for initial errors (company and pid errors).
-            time.sleep(1)
-            errors = self.__user_error_msg_company_pid()
-            time.sleep(1)
-            if errors:
-                self.__check_errors(errors)
+        # check for initial errors (company and pid errors).
+        time.sleep(1)
+        errors = self.__user_error_msg_company_pid()
+        time.sleep(1)
+        if errors:
+            self.__check_errors(errors)
 
-            self.__save_user_save_btn()
-            time.sleep(1.5)
+        self.__save_user_save_btn()
+        time.sleep(1.5)
 
-            # check for additional errors after hitting save (duplicate user and bad email).
-            errors = self.__user_error_msg_check()
-            time.sleep(1)
-            
-            # if errors exist, then do method X to fix error Y.
-            if errors:
-                self.__check_errors(errors)
+        # check for additional errors after hitting save (duplicate user and bad email).
+        errors = self.__user_error_msg_check()
+        time.sleep(1)
+        
+        # if errors exist, then do method X to fix error Y.
+        if errors:
+            self.__check_errors(errors)
 
-                # non-duplicate users will go through the process as normal.
-                if self.existing_user is False:
-                    self.save_user()
-                    self.search_user_list(time_to_wait=18)
-                    self.fill_user()
-            
-            if not errors and self.existing_user is False:
-                return False
+            # non-duplicate users will go through the process as normal.
+            if self.existing_user is False:
+                self.save_user()
+                self.search_user_list(time_to_wait=18)
+                self.fill_user()
+        
+        if not errors and self.existing_user is False:
+            return False
 
         return True
     
@@ -554,11 +571,10 @@ class UserCreation:
         '''
         default_window = self.driver.current_window_handle
 
-        time.sleep(2)
         self.driver.switch_to.default_content()
         self.driver.switch_to.frame("gsft_main")
         self.driver.find_element(By.XPATH, '//button[@name="lookup.sys_user.company"]').click()
-        time.sleep(3)
+        time.sleep(1)
 
         for window_handle in self.driver.window_handles:
             if window_handle != default_window:
@@ -586,32 +602,28 @@ class UserCreation:
                 else:
                     found = False
         
-        if self.company_created is False:
-            if company_list == [] or found is False:
-                print('\n   Company is not found in the list. Creating a new company name.')
-                time.sleep(1.5)
+        if company_list == [] or found is False:
+            print('\n   Company is not found in the list. Creating a new company name.')
+            time.sleep(1.5)
 
-                new_company_button = self.driver.find_element(By.XPATH, '//button[@type="submit"]')
-                new_company_button.click()
-                time.sleep(3)
+            new_company_button = self.driver.find_element(By.XPATH, '//button[@type="submit"]')
+            new_company_button.click()
+            time.sleep(1.5)
 
-                name_field = self.driver.find_element(By.XPATH, '//input[@name="core_company.name"]')
-                name_field.send_keys(self.company)
-                time.sleep(1.5)
-                save_button = self.driver.find_element(By.XPATH, '//button[@value="sysverb_insert_and_stay"]')
-                save_button.click()
-                time.sleep(1.5)
+            name_field = self.driver.find_element(By.XPATH, '//input[@name="core_company.name"]')
+            name_field.send_keys(self.company)
+            time.sleep(1.5)
+            save_button = self.driver.find_element(By.XPATH, '//button[@value="sysverb_insert_and_stay"]')
+            save_button.click()
+            time.sleep(1.5)
 
-                self.driver.close()
-                time.sleep(1.5)
-                self.driver.switch_to.window(default_window)
-                self.driver.switch_to.default_content()
+            self.driver.close()
+            time.sleep(1.5)
+            self.driver.switch_to.window(default_window)
+            self.driver.switch_to.default_content()
 
-                # prevent an infinite loop.
-                #self.company_created = True
-
-                # call function again to select the company name.
-                self.error_invalid_company()
+            # call function again to select the company name.
+            self.error_invalid_company()
     
     # INVALID PROJECT ID, select the project ID from the list or create a new one.
     def error_project_id(self):
@@ -776,10 +788,20 @@ class UserCreation:
         self.driver.find_element(By.ID, "sys_user.employee_number").send_keys(self.eid)
         time.sleep(3)
     
-    def __check_user_list(self) -> bool:
+    def __check_user_list(self, *, search_user_name: bool = False) -> bool:
         '''Checks if the user in the table, if they exist, is a duplicate or new user.
 
-        If any matches, then the user in the table will be edited. If it isn't a match or if `NoSuchElementException` is thrown, then a new user will be created accordingly.
+        If any matches, then the user in the table will be edited with `fill_user`.
+        
+        If a user exists but there are no matches, then the unique ID will increment by one when creating a new user.
+
+        If a `NoSuchElementException` is thrown, then a new user will be created accordingly.
+
+        Parameters
+        -------
+        `search_user_name`
+
+        (OPTIONAL) Default `False`. Searches by username instead of by email or employee ID if `True`.
         
         Returns
         -------
@@ -788,10 +810,16 @@ class UserCreation:
         `False` if `NoSuchElementException` is thrown, the user does not exist in the database.
         '''
         self.__switch_frames()
-        self.search_user_list(time_to_wait=10)
+
+        if not search_user_name:
+            self.search_user_list(time_to_wait=5)
+        else:
+            self.search_user_list(time_to_wait=5, search_by_user=True)
         
         table_body_xpath = '//tr[@record_class="sys_user"]'
+        found = False
 
+        # an exception is thrown if the table is empty- meaning there is no user found.
         try:
             eid_xpath = self.driver.find_element(By.XPATH, f'{table_body_xpath}//td[11]')
 
@@ -800,6 +828,7 @@ class UserCreation:
             if self.eid != 'TBD' or self.eid.strip(self.eid[0]) != '':
                 if eid_xpath.text == self.eid or eid_xpath.text[0:-1] == self.eid or eid_xpath.text[1:] == self.eid:
                         print(f'   Employee ID matched! {self.eid}')
+                        found = True
                         time.sleep(1)
                 
             email_xpath = self.driver.find_element(By.XPATH, f'{table_body_xpath}//td[14]')
@@ -812,12 +841,24 @@ class UserCreation:
                 for email in email_texts:
                     if self.email.lower() == email.lower():
                         print(f'   Email address matched! {self.email}')
+                        found = True
                         time.sleep(1)
                         break
             
-            return True
+            if found:
+                self.existing_user = True
+                return True
+            else:
+                # if the user exists but the values do not match, increment the unique ID because this is a new unique user.
+                print('   A different user exists in the database, incrementing the unique ID by one.')
+                self.user_name_unique_id += 1
         except NoSuchElementException:
-            # indicates that there is no existing user in the database.
+            # IF the unqiue ID was incremented, and an exception was thrown because the current username does not exist
+            # in the database (meaning that the incremented ID is completely unique), then break out of the loop above and
+            # create the new unique user with the new incremented ID.
+            if self.user_name_unique_id > 0:
+                self.duplicate_user = True
+            
             pass
     
         return False
@@ -876,7 +917,7 @@ class UserCreation:
         
         if '-' in name:
             name = name.replace('-', ' ')
-        
+
         name = name.split()
 
         # checks if the last value in the name is a suffix
