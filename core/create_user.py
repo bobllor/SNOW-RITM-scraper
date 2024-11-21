@@ -52,8 +52,9 @@ class UserCreation:
         # by default it is False- meaning that it should attempt to create a new user every time.
         self.existing_user = False
 
+        # if True, then the user is a unique duplicate user (user with the name of another existing in the database, but isn't the same person).
+        # by default it is False, assuming that every user created does not exist in the database.
         # used to handle duplicate users if the unique ID > 0. it is set to true when an exception is thrown inside check_user_list.
-        # if an exception was never thrown, that means that username already exists in the database, and the ID increments up until there is none.
         self.duplicate_user = False
 
         # used to stop a recursion issue, this only applies in one very specific circumstance.
@@ -117,6 +118,7 @@ class UserCreation:
         
         # this increments inside check_user_list. the conditions: 1. no exception is thrown & 2. a user with the name exists but isn't a match.
         if self.user_name_unique_id > 0:
+            c = 0
             while True:
                 self.user_name = f'{self.f_name}.{self.l_name}{str(self.user_name_unique_id)}@teksystemsgs.com'
 
@@ -124,7 +126,15 @@ class UserCreation:
                     self.fill_user()
                     break
 
-        if not self.existing_user:
+                if self.duplicate_user:
+                    break
+                
+                # this condition shouldn't ever be met, but just in case a cosmic ray hits the the computer.
+                if c > 7:
+                    raise AttemptsException
+                c += 1
+
+        if not self.existing_user or self.duplicate_user:
             self.__create_user_fill_info()
 
             errors = self.save_user()
