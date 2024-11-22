@@ -71,6 +71,10 @@ class UserCreation:
         # used for `fill_user` to stop the process of filling in the user if all existing values match the RITM values.
         self.stop = False
 
+        # prevent eid_search from repeating twice. this is a workaround to the new code i created, and it's easier than to overhaul my code.
+        # this is False initially, becomes True in search_user_list, then False again after email or username search is executed.
+        self.eid_search = False
+
     def __switch_frames(self):
         '''Switches to the *iframe* of the page.
 
@@ -140,7 +144,7 @@ class UserCreation:
             errors = self.save_user()
 
             if not errors:
-                self.search_user_list(time_to_wait=18)
+                self.search_user_list(time_to_wait=18, search_by_user=False)
                 self.fill_user()
         
         print("\n   User created. Please check the information before continuing.")
@@ -191,7 +195,7 @@ class UserCreation:
             # non-duplicate users will go through the process as normal.
             if self.existing_user is False:
                 self.save_user()
-                self.search_user_list(time_to_wait=18)
+                self.search_user_list(time_to_wait=18, search_by_user=False)
                 self.fill_user()
         
         if not errors and self.existing_user is False:
@@ -245,7 +249,7 @@ class UserCreation:
 
         ``search_by_user``: bool
 
-        (optional) A flag to search for the user by personal email (False) or by username (True). Default is False.
+        (optional) A flag to search for the user by username (True). Default is False.
         """
         if not isinstance(time_to_wait, int):
             raise TypeError(f'Expected an integer for time_to_wait, but got {type(time_to_wait).__name__}.')
@@ -268,9 +272,11 @@ class UserCreation:
             user_search = self.driver.find_element(By.XPATH, search)
 
             if not search_by_user:
-                if self.eid != 'TBD':
+                if self.eid != 'TBD' and not self.eid_search:
                     user_search.send_keys(self.eid)
+                    self.eid_search = True
                 else:
+                    self.eid_search = False
                     if self.email != 'TBD':
                         user_search.send_keys(self.email)
                     else:
@@ -303,14 +309,14 @@ class UserCreation:
             elements_obj = []
             for path in user_cells_obj:
                 # wait for the element to appear and select it, if a timeout exception occurs then refresh the page.
-                # if it happens a second time, then the RITM will be blacklisted.
+                # if it happens 5 times, then the RITM will be blacklisted.
                 attempts = 0
                 while True:
                     try:
-                        element = WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.XPATH, path)))
+                        element = WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.XPATH, path)))
                         break
                     except TimeoutException:
-                        self.search_user_list(time_to_wait=10)
+                        self.search_user_list(time_to_wait=8)
 
                         if attempts > 5:
                             raise AttemptsException
