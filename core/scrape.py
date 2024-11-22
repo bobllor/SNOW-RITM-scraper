@@ -102,7 +102,7 @@ class ScrapeRITM:
                     names[index] = name.replace(char, '')
 
         return names
-    
+
     def scrape_address(self) -> list:
         # column xpath which divides the address container.
         column_xpath1 = '//div[@class="section-content catalog-section-content"]/div[1]'
@@ -287,7 +287,19 @@ class ScrapeRITM:
             # this addresses the issue by using regex to extract the CID from the field.
             # when N/A is used in the field, no new field is created.
             elif cid == 'N/A':
-                pass
+                # if CID is N/A, there is only one field, and (so far) the requestors put both the company name and customer ID in this field.
+                temp_cid_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
+                temp_cid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{temp_cid_xpath}").get_attribute("value")
+
+                pos = 0
+                for i, c in enumerate(temp_cid):
+                    if c.isdigit():
+                        pos = i
+                        break
+                
+                # condition should always be true if cid is N/A, but this is used for future proofing.
+                if pos != 0:
+                    cid = temp_cid[pos:]
             # takes into account of idiots (like JW) who put the company name in the CID field.
             # this should very rarely ever be seen, but more idiot-proof code is better.
             elif not cid.isdigit():
@@ -297,6 +309,10 @@ class ScrapeRITM:
         return cid
     
     def __scrape_office_id(self) -> str:
+        '''Handles both the office ID and office location, returns a `str`.
+        
+        `_format_office_id` is used to split the two to the proper office ID and office location assignments.
+        '''
         try:
             oid_xpath = '//tr[24]//input[@class="questionsetreference form-control element_reference_input"]'
         except NoSuchElementException:
@@ -313,7 +329,8 @@ class ScrapeRITM:
             oid = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{oid_xpath}').get_attribute('value')
             o_location = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{olocation_xpath}').get_attribute('value')
 
-            oid = f'{oid} - {o_location}'
+            # this is a modified oid string because this indicates a very bad input from the requestor.
+            oid = f'{oid}||{o_location}'
 
         return oid
 
@@ -330,11 +347,23 @@ class ScrapeRITM:
         if company.isdigit():
             company_xpath = company_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
             company = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{company_xpath}')
-        
-        # in case that a colon is used in the company name.
-        if ':' in company:
-            i = company.find(':')
-            company = company[i + 1:].strip().strip('.')
+
+        # another validation in case idiots (specifically NM requestors) put in the wrong company format again...
+        # this takes into account of bad format like "COMPANY-123456" or "COMPANY 123456" or similar strings.
+        if not company[0].isdigit() and ':' not in company:
+            num_pos = 0
+            
+            for i, char in enumerate(company):
+                if char.isdigit():
+                    num_pos = i
+                    break
+            
+            if num_pos != 0:
+                company = company[:num_pos]
+        # in case that a colon is used in the company, the company string will start on col_index + 1.
+        elif ':' in company:
+            col_index = company.find(':')
+            company = company[col_index + 1:].strip().strip('.')
 
         return company.strip()
     
@@ -380,9 +409,27 @@ class ScrapeRITM:
 
         Returns the formated attributes, office ID and office location.
         '''
-        # separates the office ID and office location from the single string.
-        full_oid = oid
-        full_oid = full_oid.split("-", 1)
+        # separates the office ID and office location. normally '-' is just used, but bad inputs will result in '||' being used.
+        # these bad inputs will activate a new validation code.
+        bad_input = False
+
+        if '||' in oid:
+            full_oid = oid.split('||')
+            bad_input = True
+        elif '-' in oid:
+            full_oid = oid.split('-')
+
+        if bad_input:
+            # replaces non-digit characters in the office ID if it isn't a digit.
+            if not full_oid[0].isdigit():
+                for c in full_oid[0]:
+                    if not c.isdigit():
+                        full_oid[0] = full_oid[0].replace(c, '').strip('-')
+
+            # looks for the dash '-' if it is within the first 2 characters of the string, if it is then replace it.
+            loc_dash_pos = full_oid[1].find('-')
+            if loc_dash_pos != -1 and not loc_dash_pos > 2:
+                full_oid[1] = full_oid[1].replace('-', '', 1).strip('-')
 
         oid = full_oid[0].strip()
         oid_location = full_oid[-1].strip()
@@ -475,3 +522,12 @@ class ScrapeRITM:
                 # check if the last 5-6 digits are correct.
                 if pid_suffix.match(pid[4:]):
                     return pid
+                
+    def validate_RITM(self) -> bool:
+        '''Method used to check if the RITM is a valid RITM.
+
+        If an incorrect RITM is inputted, an empty search page is found instead of the actual ticket page.
+        
+        Returns `False` if the RITM is valid.
+        '''
+        pass
