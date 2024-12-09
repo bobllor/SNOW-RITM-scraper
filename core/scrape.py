@@ -310,6 +310,12 @@ class ScrapeRITM:
         '''Handles both the office ID and office location, returns a `str`.
         
         `_format_office_id` is used to split the two to the proper office ID and office location assignments.
+
+        Returns
+        -------
+        `string` formatted "ID - LOCATION". Default return if no issues in the default field.
+
+        `string` formatted "ID||LOCATION". This return is if there is one of two issues in the default field.
         '''
         try:
             oid_xpath = '//tr[24]//input[@class="questionsetreference form-control element_reference_input"]'
@@ -328,7 +334,8 @@ class ScrapeRITM:
             oid = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{oid_xpath}').get_attribute('value')
             o_location = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{olocation_xpath}').get_attribute('value')
 
-            # this is a modified oid string because this indicates a very bad input from the requestor.
+            # modified oid string, due to the two fields being separate from each other.
+            # a new block of code will be used in format_office_id due to the double pipe.
             oid = f'{oid}||{o_location}'
 
         return oid
@@ -402,15 +409,17 @@ class ScrapeRITM:
 
         return div
     
-    def __format_office_id(self, oid: str):
+    def __format_office_id(self, oid: str) -> str:
         '''
         Formats the office ID by splitting the "-" inside the original office ID string.
 
         Returns the formated attributes, office ID and office location.
         '''
-        # double pipes '||' indicate a very bad office ID.
+        # double pipes '||' indicate an issue with the office ID.
         if '||' in oid:
             full_oid = oid.split('||')
+
+            # the following code checks very, very bad office ID inputs.
             # replaces non-digit characters in the office ID if it isn't a digit.
             if not full_oid[0].isdigit():
                 for c in full_oid[0]:
