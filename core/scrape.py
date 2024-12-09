@@ -284,8 +284,6 @@ class ScrapeRITM:
                 cid_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
                 cid = self.driver.find_element(By.XPATH, f"{self.company_info_xpath}{cid_xpath}").get_attribute("value")
             # this is a major issue in regards to NM idiots, who decide to put N/A for the CID and still provide the CID. (i.e. 'company - 111111').
-            # this addresses the issue by using regex to extract the CID from the field.
-            # when N/A is used in the field, no new field is created.
             elif cid == 'N/A':
                 # if CID is N/A, there is only one field, and (so far) the requestors put both the company name and customer ID in this field.
                 temp_cid_xpath = '//tr[21]//input[@class="cat_item_option sc-content-pad form-control"]'
@@ -321,8 +319,9 @@ class ScrapeRITM:
 
         oid = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{oid_xpath}').get_attribute('value')
 
-        # Not Listed in the initial field will change the xpaths for the office ID and location/name.
-        if 'Not Listed' in oid or 'New Office - New Office' in oid:
+        # Not Listed and New Office in the oid field will change the xpaths for the office ID and location/name.
+        # on certain RITMs the oid_xpath is 23 instead of 24 (e.g. RITM0092364), in which case it ends up as an empty string.
+        if 'Not Listed' in oid or 'New Office - New Office' in oid or oid == '':
             oid_xpath = '//tr[25]//input[@class="cat_item_option sc-content-pad form-control"]'
             olocation_xpath = '//tr[26]//input[@class="cat_item_option sc-content-pad form-control"]'
 
@@ -409,17 +408,9 @@ class ScrapeRITM:
 
         Returns the formated attributes, office ID and office location.
         '''
-        # separates the office ID and office location. normally '-' is just used, but bad inputs will result in '||' being used.
-        # these bad inputs will activate a new validation code.
-        bad_input = False
-
+        # double pipes '||' indicate a very bad office ID.
         if '||' in oid:
             full_oid = oid.split('||')
-            bad_input = True
-        elif '-' in oid:
-            full_oid = oid.split('-')
-
-        if bad_input:
             # replaces non-digit characters in the office ID if it isn't a digit.
             if not full_oid[0].isdigit():
                 for c in full_oid[0]:
@@ -430,7 +421,9 @@ class ScrapeRITM:
             loc_dash_pos = full_oid[1].find('-')
             if loc_dash_pos != -1 and not loc_dash_pos > 2:
                 full_oid[1] = full_oid[1].replace('-', '', 1).strip('-')
-
+        elif '-' in oid:
+            full_oid = oid.split('-')
+            
         oid = full_oid[0].strip()
         oid_location = full_oid[-1].strip()
 
