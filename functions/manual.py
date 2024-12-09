@@ -87,6 +87,11 @@ class ManualRITM:
         def get_ritms() -> list:
             downloads_path = str(Path.home() / 'Downloads')
             file = filedialog.askopenfilename(initialdir=downloads_path, filetypes=[('Files', '.csv .xlsx')])
+            
+            # TODO: make this raise an exception.
+            if not file or Path(file).suffix not in ['.csv', '.xlsx']:
+                return []
+            
             # initialize it as an empty dataframe, if either the file initialization does not work then exit out back to the menu.
             df = pd.DataFrame([])
             is_csv = True if Path(file).suffix == '.csv' else False
@@ -96,7 +101,7 @@ class ManualRITM:
             else:
                 df = pd.read_excel(file)
             
-            # if the df is empty, or the first column is not a column named "number", then return an empty list.
+            # invalid file is used, the correct file is generated from the reports tab in SNOW.
             if df.empty or list(df.columns)[0].lower() != 'number':
                 return []
 
