@@ -89,17 +89,18 @@ class ManualRITM:
             file = filedialog.askopenfilename(initialdir=downloads_path, filetypes=[('Files', '.csv .xlsx')])
             # initialize it as an empty dataframe, if either the file initialization does not work then exit out back to the menu.
             df = pd.DataFrame([])
+            is_csv = True if Path(file).suffix == '.csv' else False
             
-            if Path(file).suffix == '.csv':
+            if is_csv:
                 df = pd.read_csv(file)
-            elif Path(file).suffix == '.xlsx':
+            else:
                 df = pd.read_excel(file)
             
             # if the df is empty, or the first column is not a column named "number", then return an empty list.
-            if df.empty or list(df.columns)[0] != 'number':
+            if df.empty or list(df.columns)[0].lower() != 'number':
                 return []
 
-            return list(df['number'])
+            return list(df.iloc[:,0])
 
         ritms = get_ritms()
 
