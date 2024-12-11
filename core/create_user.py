@@ -15,6 +15,24 @@ class UserCreation:
     Checks and handles for any errors that can occur during the process.
 
     If 3 exceptions are raised during the process, then it will be canceled and the RITM will be blacklisted.
+
+    IMPORTANT
+    -------
+    The order of the cells of the table in the database matters. 
+    It must follow this order (cell name / SNOW name):
+        1. User ID / User ID
+        2. Name / Name
+        3. Project ID / Project ID(u_project_id)
+        4. Customer ID / Customer ID
+        5. Office Number / Office Number
+        6. Office ID / Office ID(u_office_id)
+        7. Office Location / Office Location (u_office_location)
+        8. Division / Divison
+        9. Employee Number / Employee Number
+        10. Local Admin / Local Admin
+        11. Company / Company
+        12. Email / Email
+        13. Personal Email / Personal Email
     '''
     
     def __init__(self, driver, link: str, user_info: dict, name: list, requestor: str, admin=None):
@@ -38,7 +56,7 @@ class UserCreation:
         self.admin = AdminRights(self.company).check_blanket() if admin is None else admin
 
         # initialized in a future function call, this is necessary because of potential duplicate users.
-        self.user_name = ""
+        self.user_name = ''
         
         # initialized in create_user method.
         self.f_name = ''
@@ -65,7 +83,6 @@ class UserCreation:
 
         # used to prevent an infinite loop inside the new user creation. if two errors show up at the same time,
         # the error message at the top of the page will not go away and cause an infinite loop.
-        # when > 3, an exception will be thrown and blacklist the RITM.
         self.error_counter = 0
 
         # used for `fill_user` to stop the process of filling in the user if all existing values match the RITM values.
@@ -195,7 +212,7 @@ class UserCreation:
             # non-duplicate users will go through the process as normal.
             if self.existing_user is False:
                 self.save_user()
-                self.search_user_list(time_to_wait=18, search_by_user=False)
+                self.search_user_list(time_to_wait=18)
                 self.fill_user()
         
         if not errors and self.existing_user is False:
@@ -352,13 +369,10 @@ class UserCreation:
                         time.sleep(1.5)
                         cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="sys_display.LIST_EDIT_sys_user.u_project_id"]')
                     else:
-                        # normal fill operation.
                         ActionChains(self.driver).double_click(elements_obj[count]).perform()
                         time.sleep(.5)
                         cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="cell_edit_value"]')
 
-                    # normally opening the cell already highlights the entire text,
-                    # but just to be safe this will remove it also.
                     if cell_edit_value.text:
                         cell_edit_value.send_keys(Keys.CONTROL + "a")
                         time.sleep(.5)
@@ -370,7 +384,6 @@ class UserCreation:
                     cell_edit_value.send_keys(Keys.ENTER)
                     time.sleep(.5)
                     
-                    # if successful, reset repeat_attempts to 0.
                     repeat_attempts = 0
                     count += 1
                     time.sleep(1)
@@ -378,12 +391,7 @@ class UserCreation:
                     repeat_attempts += 1
                     print(f'   Failed inserting {keys_to_send[count]}. Attempting to fill again.')
                     
-                    # in the case that the first two attempts do not work, refresh the page and try again.
-                    if repeat_attempts < 3:
-                        self.driver.refresh()
-                        time.sleep(5)
-
-                    time.sleep(1)
+                    self.search_user_list(time_to_wait=5)
                 
             # initialized by the constructor, checks if the company is a blanket admin.
             # NOTE: this does not check for manually approved ones. it will maybe be implemented.
@@ -534,7 +542,7 @@ class UserCreation:
         errors = []
         
         elements = []
-        for count, error in enumerate(error_list):
+        for error in error_list:
             try:
                 error_ele = self.driver.find_element(By.XPATH, f'//div[contains(text(), "{error}")]')
                 elements.append(error_ele)
@@ -688,9 +696,9 @@ class UserCreation:
                     self.driver.switch_to.window(default_window)
                     break
         
-        # create a new project ID.
+        # process of creating a new project ID.
         if project_list == [] or found is False:
-            # in case an infinite loop occurs during this process, exit out immediately for blacklisting.
+            # in case an infinite loop occurs during this process.
             if self.error_counter == 3:
                 raise AttemptsException
             
@@ -834,13 +842,21 @@ class UserCreation:
         
         table_body_xpath = '//tr[@record_class="sys_user"]'
         found = False
+        
+        '''TODO:
+        1. gets an obj list of users from the table.
+        2. use each obj and compare the employee ID, email, and then username in that order.
+        3. if employee ID or email matches, break out immediately. username requires special consideration.
+        4. if none matches, then create a new user and proceed as usual.
+        ''' 
+        users_obj_list = self.driver.find_elements(By.XPATH, f'{table_body_xpath}//tbody[@class="list2_body -sticky-group-headers"]')
 
         # an exception is thrown if the table is empty- meaning there is no user found.
         try:
             eid_xpath = self.driver.find_element(By.XPATH, f'{table_body_xpath}//td[11]')
 
             # ensure that this is a valid employee ID to check. 
-            # often times the ID isn't given and is either 'TBD' or a bunch of '0's.
+            # often times the ID isn't given and is either 'TBD' or a repeating number.
             if self.eid != 'TBD' or self.eid.strip(self.eid[0]) != '':
                 if eid_xpath.text == self.eid or eid_xpath.text[0:-1] == self.eid or eid_xpath.text[1:] == self.eid:
                         print(f'   Employee ID matched! {self.eid}')
