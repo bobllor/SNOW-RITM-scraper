@@ -33,6 +33,9 @@ if __name__ == '__main__':
         try:
             menu.display_main_menu()
             menu_choice = menu.main_menu_choice()
+
+            if menu_choice.lower() == 'quit':
+                break
             
             if menu_choice == 'a':
                 print('WIP sorry!')
@@ -62,3 +65,8 @@ if __name__ == '__main__':
             print('\n   ERROR: Something went wrong during the process. Please try again.')
         except TypeError as e:
             print(f'\n   {e}')
+        except KeyboardInterrupt:
+            print('   KEYBOARD INTERRUPTION. Closing operation.')
+            break
+    
+    driver.quit()
