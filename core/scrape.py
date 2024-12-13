@@ -381,7 +381,7 @@ class ScrapeRITM:
         if '@' not in email:
             return 'TBD'
         
-        return self.__validate_string(email)
+        return self.__validate_email(email)
     
     def __scrape_employee_id(self) -> str:
         eid_xpath = '//tr[4]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
@@ -438,35 +438,25 @@ class ScrapeRITM:
 
         return oid, oid_location
 
-    def __validate_string(self, word: str) -> str:
-        '''
-        Validates a string, removes any unwanted characters from a string.
-        '''
-        escape_chars = {'\n', '\t'}
-        bad_chars = {'<', '>'}
+    def __validate_email(self, email: str) -> str:
+        try:
+            tup = re.search('@', email).span()
 
-        # checks for any escape characters in the string.
-        # if an escape character is found, start the string at the position of the escape char.
-        if word[0] in string.ascii_letters:
-            return word.strip().strip('\t')
-        else:
-            pos_list = [pos for pos in range(len(word)) if word[pos] in escape_chars]
-            if pos_list:
-                word = word[pos_list[0]:]
+            bad_chars = {'<', '>', '/', '\\', ']', '[', ':', ';', ' ', ':', '|', '?', '\t'}
 
-            # checks for any blacklisted characters in the string.
-            bad_list = [pos for pos in range(len(word)) if word[pos] in bad_chars]
-            if bad_list:
-                for char in bad_chars:
-                    word = word.replace(char, '')
-                
-                # checks if a space exists in the beginning of the input, if it does then
-                # the string will start on index after the space.
-                pos = word.find(' ')
-                if pos != -1:
-                    word = word[pos:]
+            lp, rp = tup[0], tup[1]
+
+            # hack fix. i cba.
+            while email[lp] not in bad_chars and lp > 0:
+                lp -= 1
+
+            while email[rp] not in bad_chars and rp < len(email) - 1:
+                rp += 1
+
+        except AttributeError:
+            email = 'TBD'
             
-        return word.strip()
+        return email[lp + 1 if email[lp] in bad_chars else lp:rp if email[rp] in bad_chars else rp + 1]
     
     def __format_project_id(self, pid):
         '''
