@@ -310,7 +310,6 @@ class UserCreation:
     # used for both filling and checking the user information.        
     def fill_user(self):
         '''Edits the table cells for the current user once a search is completed.'''
-
         # this is used to prevent some recursion issue.
         if self.loop_once is False:
             self.__switch_frames()
@@ -341,10 +340,12 @@ class UserCreation:
                         
                 elements_obj.append(element)
 
+            cell_names = ['Customer ID', 'Office Number',
+            'Office ID', 'Office Location', 'Division']
             # checks if the cell values are the same as the ticket info.
             # if True, then remove the web object from the list to not fill.
             if self.existing_user:
-                self.__check_cell_values(keys_to_send, elements_obj)
+                self.__check_cell_values(keys_to_send, elements_obj, cell_names)
             else:
                 # remove oid/3rd element due to the existing user already having this value.
                 del keys_to_send[2]
@@ -360,7 +361,7 @@ class UserCreation:
                 try:
                     print(f'   Inserting {keys_to_send[count]}...')
                     # used only for duplicate users, they have an additional PID to potentially modify.
-                    if self.pid == keys_to_send[count]:
+                    if cell_names[0] == 'Project ID':
                         ActionChains(self.driver).click(elements_obj[count]).perform()
                         time.sleep(.5)
                         ActionChains(self.driver).send_keys(Keys.ARROW_RIGHT).perform()
@@ -420,7 +421,7 @@ class UserCreation:
         
             self.driver.switch_to.default_content()
 
-    def __check_cell_values(self, keys_to_send: list, elements_obj: list) -> None:
+    def __check_cell_values(self, keys_to_send: list, elements_obj: list, cell_names: list) -> None:
         '''Checks the user cell values in the database table for any mismatching values.
         
         Has two parameters:
@@ -444,10 +445,9 @@ class UserCreation:
         # insert these two elements to the front for both checking and modifying.
         elements_obj.insert(0, pid_cell_element)
         keys_to_send.insert(0, self.pid)
+        cell_names.insert(0, 'Project ID')
 
         index_remover = []
-        cell_names = ['Project ID', 'Customer ID', 'Office Number',
-                    'Office ID', 'Office Location', 'Division']
         match_count = 0
 
         # if a cell matches to the key, track the index number.
@@ -467,6 +467,7 @@ class UserCreation:
         for index in sorted(index_remover, reverse=True):
             del elements_obj[index]
             del keys_to_send[index]
+            del cell_names[index]
         
         if keys_to_send:
             # changes the xpath "//td[5]" to the name cell "//td[4]".
@@ -842,16 +843,10 @@ class UserCreation:
         
         table_body_xpath = '//tr[@record_class="sys_user"]'
         found = False
-        
-        '''TODO:
-        1. gets an obj list of users from the table.
-        2. use each obj and compare the employee ID, email, and then username in that order.
-        3. if employee ID or email matches, break out immediately. username requires special consideration.
-        4. if none matches, then create a new user and proceed as usual.
-        ''' 
-        users_obj_list = self.driver.find_elements(By.XPATH, f'{table_body_xpath}//tbody[@class="list2_body -sticky-group-headers"]')
 
-        # an exception is thrown if the table is empty- meaning there is no user found.
+        #obj = self.__get_user()
+
+        # an exception is thrown if the table is empty.
         try:
             eid_xpath = self.driver.find_element(By.XPATH, f'{table_body_xpath}//td[11]')
 
@@ -890,10 +885,27 @@ class UserCreation:
             # create the new unique user with the new incremented ID.
             if self.user_name_unique_id > 0:
                 self.duplicate_user = True
-            
-            pass
     
         return False
+
+    def __get_user(self):
+        '''Returns the web object of the correct use in the table.
+        '''
+        try:
+            self.driver.find_element(By.CLASS_NAME, 'list2_no_records')
+
+            return None
+        except NoSuchElementException:
+            list_row_odds = self.driver.find_elements(By.CSS_SELECTOR, '.list_row.list_odd')
+            list_row_evens = self.driver.find_elements(By.CSS_SELECTOR, '.list_row.list_even')
+
+            table_objs = list_row_evens + list_row_odds
+
+            for obj in table_objs:
+                full_text = obj.text
+
+                if self.eid in full_text or self.email in full_text:
+                    return obj
 
     def __send_email_keys(self):
         '''Fills in the username and personal email address fields during user creation.
