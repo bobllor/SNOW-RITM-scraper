@@ -97,7 +97,10 @@ class ManualRITM:
             is_csv = True if Path(file).suffix == '.csv' else False
             
             if is_csv:
-                df = pd.read_csv(file)
+                try:
+                    df = pd.read_csv(file)
+                except UnicodeDecodeError:
+                    df = pd.read_csv(file, encoding='windows-1254')
             else:
                 df = pd.read_excel(file)
             
