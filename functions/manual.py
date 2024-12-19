@@ -48,34 +48,27 @@ class ManualRITM:
             if ritm.isdigit():
                 ritm = 'RITM' + ritm
 
-            while not ritm_checker.match(ritm):
+            if ritm_checker.match(ritm):
+                print("\n   Searching for RITM...")
+                scraper = ScrapeRITM(self.driver, ritm)
+                scraper.search_ritm()
+
+                sel.create_user(self.driver, scraper, ritm)
+
+                scanner = VTBScanner(self.driver, Links().vtb)
+
+                if self.driver.current_url != Links().vtb:
+                    scanner.get_to_vtb()
+                
+                ritm_element = scanner.get_ritm_element(ritm)
+
+                if ritm_element:
+                    scanner.drag_task(ritm_element, 'RITM')
+                else:
+                    print(f'{ritm} is not found in the Requests lane.')
+                
+                input("\n   Press 'enter' to return back to menu.")
                 clear()
-                print("\n   RITM number format is wrong.")
-                ritm = get_ritm()
-
-                if ritm == 'QUIT':
-                    break
-
-            print("\n   Searching for RITM...")
-            scraper = ScrapeRITM(self.driver, ritm)
-            scraper.search_ritm()
-
-            sel.create_user(self.driver, scraper, ritm)
-
-            scanner = VTBScanner(self.driver, Links().vtb)
-
-            if self.driver.current_url != Links().vtb:
-                scanner.get_to_vtb()
-            
-            ritm_element = scanner.get_ritm_element(ritm)
-
-            if ritm_element:
-                scanner.drag_task(ritm_element, 'RITM')
-            else:
-                print(f'{ritm} is not found in the Requests lane.')
-            
-            input("\n   Press 'enter' to return back to menu.")
-            clear()
 
     def file_input(self) -> list:
         # tl;dr: return a list of RITMs which leads to a for loop of all RITMs.
