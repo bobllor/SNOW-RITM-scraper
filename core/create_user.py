@@ -369,6 +369,7 @@ class UserCreation:
                         ActionChains(self.driver).send_keys(Keys.ENTER).perform()
                         time.sleep(1.5)
                         cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="sys_display.LIST_EDIT_sys_user.u_project_id"]')
+                        del cell_names[0]
                     else:
                         ActionChains(self.driver).double_click(elements_obj[count]).perform()
                         time.sleep(.5)
