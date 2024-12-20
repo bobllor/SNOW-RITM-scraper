@@ -3,6 +3,7 @@ from core.vtb_scanner import VTBScanner
 from components.links import Links
 from tkinter import filedialog
 from pathlib import Path
+from selenium.common.exceptions import JavascriptException, StaleElementReferenceException, NoSuchElementException
 from . import selections as sel
 import re, os
 import pandas as pd
@@ -109,22 +110,47 @@ class ManualRITM:
             return []
 
         for ritm in ritms:
-            print(f"\n   Searching for {ritm}...")
-            scraper = ScrapeRITM(self.driver, ritm)
-            scraper.search_ritm()
+            try:
+                print(f"\n   Searching for {ritm}...")
+                scraper = ScrapeRITM(self.driver, ritm)
+                scraper.search_ritm()
 
-            sel.create_user(self.driver, scraper, ritm)
+                sel.create_user(self.driver, scraper, ritm)
 
-            scanner = VTBScanner(self.driver, Links().vtb)
+                scanner = VTBScanner(self.driver, Links().vtb)
 
-            if self.driver.current_url != Links().vtb:
-                scanner.get_to_vtb()
+                if self.driver.current_url != Links().vtb:
+                    scanner.get_to_vtb()
+                
+                ritm_element = scanner.get_ritm_element(ritm)
+
+                if ritm_element:
+                    scanner.drag_task(ritm_element, 'RITM')
+                else:
+                    print(f'{ritm} is not found in the Requests lane.')
             
-            ritm_element = scanner.get_ritm_element(ritm)
+                clear()
+            except JavascriptException:
+                # unsure why this error happens. this is a "has no size and location" error.
+                print('ERROR: Cannot drag task. Continuing the process.')
+                flag = False
+                self.driver.refresh()
 
-            if ritm_element:
-                scanner.drag_task(ritm_element, 'RITM')
-            else:
-                print(f'{ritm} is not found in the Requests lane.')
-        
-            clear()
+                if not flag:
+                    clear()
+                    flag = True
+                    continue
+                
+                # make a proper exception for this. hopefully this does not bite my ass.
+                raise NoSuchElementException
+            except StaleElementReferenceException:
+                print('ERROR: Element is stale. Contiuing the process.')
+                flag = False
+
+                if not flag:
+                        clear()
+                        flag = True
+                        continue
+                    
+                # same thing as above. please save my ass.
+                raise NoSuchElementException
