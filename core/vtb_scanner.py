@@ -85,7 +85,7 @@ class VTBScanner():
         self.__switch_frames()
         
         try:
-            ritm_elements = WebDriverWait(self.driver, 15).until(
+            ritm_elements = WebDriverWait(self.driver, 6).until(
                 EC.presence_of_all_elements_located((By.XPATH, f'{self.req_lane}//a[contains(text(), "{ritm}")]'))
             )
         except TimeoutException:
@@ -125,7 +125,7 @@ class VTBScanner():
         self.__switch_frames()
 
         lane = self.driver.find_element(By.XPATH, '//li[@v-lane-index="1" and @h-lane-index="0"]')
-
+        element = element.find_element(By.XPATH, '..')
         # by default, the task will be dragged over to the user created lane.
         # if an INC is detected, then it will move it accordingly.
         if type == 'INC':
