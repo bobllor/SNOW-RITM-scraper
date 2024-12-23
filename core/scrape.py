@@ -59,8 +59,7 @@ class ScrapeRITM:
             print("   RITM search complete.")
             # reset search field to prepare it for future queries
             global_search.click()
-            global_search.send_keys(Keys.CONTROL + "a")
-            global_search.send_keys(Keys.DELETE)
+            global_search.send_keys(Keys.CONTROL + "a" + Keys.DELETE)
         except ElementClickInterceptedException:
             # some issue with clicking the element, so instead reset back to the dashboard to repeat the process.
             print('   ERROR: Something went wrong with the search. Trying the process again.')
