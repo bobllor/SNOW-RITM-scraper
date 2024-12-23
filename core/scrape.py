@@ -1,7 +1,6 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import NoSuchElementException
-from selenium.common.exceptions import ElementClickInterceptedException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, ElementClickInterceptedException, NoSuchFrameException
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time, re, string
@@ -21,23 +20,38 @@ class ScrapeRITM:
         self.req_xpath = '//input[@id="sys_display.sc_req_item.request"]'
 
         self.allegis_orgs = ["Aerotek", "Aston Carter", "Actalent", "MLA"]
-    
+
     def search_ritm(self):
         # ensure that driver is not in a frame before performing a search.
         self.driver.switch_to.default_content()
+
+        # let's fix this later...
+        if self.driver.current_url != 'https://tek.service-now.com/now/nav/ui/classic/params/target/%24pa_dashboard.do':
+            self.driver.get('https://tek.service-now.com/now/nav/ui/classic/params/target/%24pa_dashboard.do')
         
         try:
             # search for global search bar and query the site for an RITM ticket
             try:
                 global_search_xpath = '//input[@name="sysparm_search"]'
-                global_search = WebDriverWait(self.driver, 15).until(EC.presence_of_element_located((By.XPATH, global_search_xpath)))
-            except NoSuchElementException:
+                global_search = WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.XPATH, global_search_xpath)))
+
+                global_search.send_keys(self.ritm)
+            except TimeoutException:
                 # used on the new SNOW, i do not know if this will be permanent or a temporary change.
                 # as of 10/8/2024, this seems temporary but putting this here for future proofing.
-                search_container = self.driver.find_element(By.XPATH, '//div[@class="search-container"]')
-                search_container.click()
-                global_search = self.driver.find_element(By.XPATH, '//input[@id="sncwsgs-typeahead-input"]')
-            global_search.send_keys(self.ritm)
+                sr1 = self.driver.find_element(By.CSS_SELECTOR, 'macroponent-f51912f4c700201072b211d4d8c26010').shadow_root
+                sr2 = sr1.find_element(By.CSS_SELECTOR, 'sn-polaris-layout').shadow_root
+                sr3 = sr2.find_element(By.CSS_SELECTOR, 'sn-polaris-header').shadow_root
+                sr4 = sr3.find_element(By.CSS_SELECTOR, 'sn-search-input-wrapper').shadow_root
+                sr5 = sr4.find_element(By.CSS_SELECTOR, 'sn-component-workspace-global-search-typeahead').shadow_root
+
+                global_search = sr5.find_element(By.CSS_SELECTOR, '.sn-global-typeahead').find_element(By.TAG_NAME, 'input')
+
+                global_search.send_keys(self.ritm)
+                time.sleep(1)
+                global_search.send_keys(Keys.ARROW_DOWN)
+                time.sleep(.2)
+
             global_search.send_keys(Keys.ENTER)
 
             time.sleep(15)
@@ -73,7 +87,15 @@ class ScrapeRITM:
         return date
 
     def scrape_name(self) -> list:
-        self.driver.switch_to.frame("gsft_main")
+        try:
+            self.driver.switch_to.frame('gsft_main')
+        except NoSuchFrameException:
+            # only related to new SNOW
+            sr1 = self.driver.find_element(By.TAG_NAME, 'macroponent-f51912f4c700201072b211d4d8c26010').shadow_root
+            sr2 = sr1.find_element(By.CSS_SELECTOR, 'sn-canvas-appshell-root')
+            iframe = sr2.find_element(By.CSS_SELECTOR, 'iframe')
+            self.driver.switch_to.frame(iframe)
+
 
         # xpath of first and last name child containers
         fn_xpath = '//tr[1]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
