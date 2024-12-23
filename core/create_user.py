@@ -1,7 +1,7 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, NoSuchFrameException
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from components.blanket_admin import AdminRights
@@ -103,8 +103,10 @@ class UserCreation:
             WebDriverWait(self.driver, 6).until(
                 EC.frame_to_be_available_and_switch_to_it(self.driver.find_element(By.XPATH, '//iframe[@id="gsft_main"]'))
             )
-        except TimeoutException:
-            pass
+        except TimeoutException or NoSuchFrameException:
+            self.driver.switch_to.default_content()
+        except NoSuchElementException:
+            self.driver.switch_to.default_content()
 
     def create_user(self):
         '''Creates the user from the RITM and adds them in the SNOW's database.
@@ -275,7 +277,8 @@ class UserCreation:
 
         # this is used to prevent some recursion issue. i don't remember why and where it happened.
         if self.loop_once is False:
-            user_link = 'https://tek.service-now.com/nav_to.do?uri=%2Fsys_user_list.do%3Fsysparm_clear_stack%3Dtrue%26sysparm_userpref_module%3D62354a4fc0a801941509bc63f8c4b979'
+            #user_link = 'https://tek.service-now.com/nav_to.do?uri=%2Fsys_user_list.do%3Fsysparm_clear_stack%3Dtrue%26sysparm_userpref_module%3D62354a4fc0a801941509bc63f8c4b979'
+            user_link = 'https://tek.service-now.com/sys_user_list.do?sysparm_clear_stack=true&sysparm_userpref_module=62354a4fc0a801941509bc63f8c4b979'
 
             print("\n   Searching for user...")
             

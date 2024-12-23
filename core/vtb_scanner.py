@@ -45,6 +45,8 @@ class VTBScanner():
             # TODO: create a logging message here.
             print('   Something went wrong during the switching to the VTB frame.')
             pass
+        except NoSuchElementException:
+            self.driver.switch_to.default_content()
 
     def get_ritm_number(self):
         '''
