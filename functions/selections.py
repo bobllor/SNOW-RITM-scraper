@@ -18,7 +18,7 @@ def create_user(driver: webdriver, scraper: ScrapeRITM, ritm: str) -> None:
     requestor = scraper.scrape_requestor()
     debug_ritm_info(user_info, name)
 
-    new_user = UserCreation(driver, Links.new_user, user_info, name, requestor)
+    new_user = UserCreation(driver, Links.new_new_user, user_info, name, requestor)
     print("\n   Starting user creation process.")
     time.sleep(3)
     new_user.create_user()
