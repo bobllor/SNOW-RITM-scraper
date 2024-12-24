@@ -21,6 +21,20 @@ class ScrapeRITM:
 
         self.allegis_orgs = ["Aerotek", "Aston Carter", "Actalent", "MLA"]
 
+    def __switch_frame(self) -> None:
+        '''Switches to the main `iframe`.
+        
+        If `NoSuchFrameException` is raised, then additional steps are taken to handle switching to the `iframe` in the new DOM.'''
+        try:
+            self.driver.switch_to.frame("gsft_main")
+        except NoSuchFrameException:
+            sr1 = self.driver.find_element(By.TAG_NAME, 'macroponent-f51912f4c700201072b211d4d8c26010').shadow_root
+            sr2 = sr1.find_element(By.CSS_SELECTOR, 'sn-canvas-appshell-root')
+            iframe = sr2.find_element(By.CSS_SELECTOR, 'iframe')
+            
+            self.driver.switch_to.frame(iframe)
+
+
     def search_ritm(self):
         # ensure that driver is not in a frame before performing a search.
         self.driver.switch_to.default_content()
@@ -59,13 +73,32 @@ class ScrapeRITM:
             print("   RITM search complete.")
             # reset search field to prepare it for future queries
             global_search.click()
-            global_search.send_keys(Keys.CONTROL + "a" + Keys.DELETE)
+            global_search.send_keys(Keys.CONTROL + "a" + Keys.DELETE + Keys.ESCAPE)
         except ElementClickInterceptedException:
             # some issue with clicking the element, so instead reset back to the dashboard to repeat the process.
             print('   ERROR: Something went wrong with the search. Trying the process again.')
             self.driver.get('https://tek.service-now.com/nav_to.do?uri=%2F$pa_dashboard.do')
             time.sleep(5)
             self.search_ritm()
+    
+    def is_ritm(self) -> bool:
+        '''Method used to check if the current page is a RITM ticket for scraping.
+
+        Returns `True` if the searched page is a RITM ticket.
+        '''
+        self.__switch_frame()
+
+        try:
+            blocked_items = {'return'}
+            ticket_item = self.driver.find_element(By.CSS_SELECTOR, '.form-control.element_reference_input.readonly.disabled').get_attribute('value')
+
+            if ticket_item.lower() in blocked_items:
+                return False
+        except NoSuchElementException:
+            return False
+
+
+        return True
 
     def scrape_ritm(self):
         #self.driver.switch_to.frame("gsft_main")
@@ -86,14 +119,7 @@ class ScrapeRITM:
         return date
 
     def scrape_name(self) -> list:
-        try:
-            self.driver.switch_to.frame('gsft_main')
-        except NoSuchFrameException:
-            # only related to new SNOW
-            sr1 = self.driver.find_element(By.TAG_NAME, 'macroponent-f51912f4c700201072b211d4d8c26010').shadow_root
-            sr2 = sr1.find_element(By.CSS_SELECTOR, 'sn-canvas-appshell-root')
-            iframe = sr2.find_element(By.CSS_SELECTOR, 'iframe')
-            self.driver.switch_to.frame(iframe)
+        #self.driver.switch_to.frame('gsft_main')
 
 
         # xpath of first and last name child containers

@@ -54,22 +54,28 @@ class ManualRITM:
                 scraper = ScrapeRITM(self.driver, ritm)
                 scraper.search_ritm()
 
-                sel.create_user(self.driver, scraper, ritm)
+                flag = scraper.is_ritm()
 
-                scanner = VTBScanner(self.driver, Links.new_vtb)
+                if flag:
+                    sel.create_user(self.driver, scraper, ritm)
 
-                if self.driver.current_url != Links.new_vtb:
-                    scanner.get_to_vtb()
-                
-                ritm_element = scanner.get_ritm_element(ritm)
+                    scanner = VTBScanner(self.driver, Links.new_vtb)
 
-                if ritm_element:
-                    scanner.drag_task(ritm_element, 'RITM')
+                    if self.driver.current_url != Links.new_vtb:
+                        scanner.get_to_vtb()
+                    
+                    ritm_element = scanner.get_ritm_element(ritm)
+
+                    if ritm_element:
+                        scanner.drag_task(ritm_element, 'RITM')
+                    else:
+                        print(f'{ritm} is not found in the Requests lane.')
+                    
+                    input("\n   Press 'enter' to return back to menu.")
+                    clear()
                 else:
-                    print(f'{ritm} is not found in the Requests lane.')
-                
-                input("\n   Press 'enter' to return back to menu.")
-                clear()
+                    print('\n   ERROR: Incorrect RITM read.')
+                    input('   Press "enter" to return back to the menu.')
 
     def file_input(self) -> list:
         # tl;dr: return a list of RITMs which leads to a for loop of all RITMs.
