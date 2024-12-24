@@ -600,8 +600,7 @@ class UserCreation:
         '''
         default_window = self.driver.current_window_handle
 
-        self.driver.switch_to.default_content()
-        self.driver.switch_to.frame("gsft_main")
+        self.__switch_frames()
         self.driver.find_element(By.XPATH, '//button[@name="lookup.sys_user.company"]').click()
         time.sleep(1)
 
@@ -848,7 +847,10 @@ class UserCreation:
         table_body_xpath = '//tr[@record_class="sys_user"]'
         found = False
 
-        #obj = self.__get_user()
+        '''obj = self.__get_user()
+
+        if not obj:
+            return False'''
 
         # an exception is thrown if the table is empty.
         try:
@@ -892,9 +894,18 @@ class UserCreation:
     
         return False
 
-    def __get_user(self):
-        '''Returns the web object of the correct use in the table.
+    def __get_user(self) -> str:
+        '''Returns the web object of the matching user in the table.
         '''
+        # TODO: FINISH THIS.
+        info_check = []
+
+        if self.eid.lower() != 'tbd':
+            info_check.append(self.eid)
+        
+        if self.email.lower() != 'tbd' or '@' in self.email.lower():
+            info_check.append(self.eid)
+
         try:
             self.driver.find_element(By.CLASS_NAME, 'list2_no_records')
 
@@ -908,8 +919,11 @@ class UserCreation:
             for obj in table_objs:
                 full_text = obj.text
 
-                if self.eid in full_text or self.email in full_text:
-                    return obj
+                for info in info_check:
+                    if info in full_text:
+                        return obj
+            
+            return None
 
     def __send_email_keys(self):
         '''Fills in the username and personal email address fields during user creation.
