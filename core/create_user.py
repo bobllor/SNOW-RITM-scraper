@@ -16,33 +16,49 @@ class UserCreation:
 
     If 3 exceptions are raised during the process, then it will be canceled and the RITM will be blacklisted.
 
-    IMPORTANT
+    Parameters
     -------
-    The order of the cells of the table in the database matters. 
-    It must follow this order (cell name / SNOW name):
-        1. User ID / User ID
-        2. Name / Name
-        3. Project ID / Project ID(u_project_id)
-        4. Customer ID / Customer ID
-        5. Office Number / Office Number
-        6. Office ID / Office ID(u_office_id)
-        7. Office Location / Office Location (u_office_location)
-        8. Division / Divison
-        9. Employee Number / Employee Number
-        10. Local Admin / Local Admin
-        11. Company / Company
-        12. Email / Email
-        13. Personal Email / Personal Email
+    `driver`
+
+    The `WebDriver`.
+
+    `link`
+    
+    Link to the new user creation URL.
+
+    `user_info`
+
+    `dict` containing information about the ticket. This requires 8 values:
+    
+        1. email
+        2. e_id (employee ID)
+        3. division
+        4. c_id (customer ID)
+        5. company
+        6. o_id (office ID)
+        7. p_id (project ID)
+        8. org (organization)
+        9. o_id_loc (office ID location)
+
+    `name`
+
+    A `list` that contains the first and last name of the user.
+
+    `requestor`
+
+    The email address of the person who requested the ticket.
+
+    `admin`
+
+    Determines if the user is an admin or not. By default `False`.
     '''
     
-    def __init__(self, driver, link: str, user_info: dict, name: list, requestor: str, admin=None):
+    def __init__(self, driver, link: str, user_info: dict, name: list, requestor: str, admin=False):
         self.driver = driver
         self.link = link
         self.name = name
         self.requestor = requestor
 
-        # company info, 8 instances are initialized from a list from ScrapeRITM.
-        # keys: email, e_id, division, c_id, company, o_id, p_id, org, o_id_loc
         self.email = user_info['email'].strip()
         self.eid = user_info['e_id']
         self.div = user_info['division']
@@ -53,7 +69,7 @@ class UserCreation:
         self.org = user_info['org']
         self.oid_location = user_info['o_id_loc']
 
-        self.admin = AdminRights(self.company).check_blanket() if admin is None else admin
+        self.admin = AdminRights(self.company).check_blanket() if not admin else admin
 
         # initialized in a future function call, this is necessary because of potential duplicate users.
         self.user_name = ''
@@ -61,13 +77,13 @@ class UserCreation:
         # initialized in create_user method.
         self.f_name = ''
         self.l_name = ''
+        
+        # NOTE: i am sorry for the properties below. 
 
         # used for duplicate keys, increments by 1 if the new user is unique.
-        # NOTE: the first duplicate user starts at 1.
         self.user_name_unique_id = 0
 
-        # bool to check if a user already exists, then modify the user instead of creating a new one.
-        # by default it is False- meaning that it should attempt to create a new user every time.
+        # bool to check if the current user has an existing profile. this can be the exact user or a different user with the same name.
         self.existing_user = False
 
         # if True, then the user is a unique duplicate user (user with the name of another existing in the database, but isn't the same person).
@@ -93,7 +109,7 @@ class UserCreation:
         self.eid_search = False
 
     def __switch_frames(self):
-        '''Switches to the *iframe* of the page.
+        '''Switches to the iframe of the page.
 
         If no iframes exist on the current page, a `TimeoutException` is thrown, which is handled
         and keeps the driver on the default frame.
@@ -847,6 +863,7 @@ class UserCreation:
         table_body_xpath = '//tr[@record_class="sys_user"]'
         found = False
 
+        # commented this out, this is a new way of checking the users list. WIP.
         '''obj = self.__get_user()
 
         if not obj:
@@ -858,7 +875,10 @@ class UserCreation:
 
             # ensure that this is a valid employee ID to check. 
             # often times the ID isn't given and is either 'TBD' or a repeating number.
-            if self.eid != 'TBD' or self.eid.strip(self.eid[0]) != '':
+            if self.eid.isdigit() and not self.eid.strip(self.eid[0]):
+                self.eid = 'TBD'
+
+            if self.eid.lower() != 'tbd':
                 if eid_xpath.text == self.eid or eid_xpath.text[0:-1] == self.eid or eid_xpath.text[1:] == self.eid:
                         print(f'   Employee ID matched! {self.eid}')
                         found = True
@@ -870,7 +890,7 @@ class UserCreation:
 
             # ensures this is a valid email before checking it. the email address is
             # often there 95% of the time. most of the error checking occurs in scrape.py.
-            if self.email != 'TBD' or '@' not in self.email:
+            if self.email.lower() != 'tbd' or '@' not in self.email:
                 for email in email_texts:
                     if self.email.lower() == email.lower():
                         print(f'   Email address matched! {self.email}')
@@ -894,7 +914,7 @@ class UserCreation:
     
         return False
 
-    def __get_user(self) -> str:
+    def __get_user(self) -> object | None:
         '''Returns the web object of the matching user in the table.
         '''
         # TODO: FINISH THIS.
