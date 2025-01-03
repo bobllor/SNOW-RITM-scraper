@@ -1,9 +1,8 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, StaleElementReferenceException
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import JavascriptException
 import time
 '''
 how the VTBScanner works:
@@ -116,26 +115,34 @@ class VTBScanner():
         if len(inc_elements) > 0:
             return inc_elements[0]
     
-    def drag_task(self, element, type: str):
+    def drag_task(self, element, *, is_inc: bool = False):
         '''
-        Drags the task over to their respective lane. This does it for both INCs and RITMs.
+        Drags a ticket in the Requests lane to their respective lane.
 
-        INCs gets dragged to the ASAP/INC/Replace lane.
+        RITMs gets moved to the User Created lane. INCs gets moved to the ASAP/INC/Replace lane. 
 
-        Most RITMs will get dragged over to the User Created lane, some may be in the Software row instead.
+        Parameters
+        ---------
+        `is_inc`
+
+        Indicates whether the element is an INC instead of a RITM.
+        
+        This parameter is only relevant to the automatic ticket detection, it can be ignored entirely.
+        Default is `False`.
         '''
         self.__switch_frames()
 
-        lane = self.driver.find_element(By.XPATH, '//li[@v-lane-index="1" and @h-lane-index="0"]')
+        if not is_inc:
+            lane = self.driver.find_element(By.XPATH, '//li[@v-lane-index="1" and @h-lane-index="0"]')
+        else:
+            lane = self.driver.find_element(By.XPATH, '//li[@v-lane-index="2" and @h-lane-index="0"]')
+
+        # selects the parent of the element (div). prevents: 1. clicking on the href & 2. having a javascript no size error.
         element = element.find_element(By.XPATH, '..')
-        # by default, the task will be dragged over to the user created lane.
-        # if an INC is detected, then it will move it accordingly.
-        if type == 'INC':
-            inc_lane = self.driver.find_element(By.XPATH, '//li[@v-lane-index="2" and @h-lane-index="0"]')
-            lane = inc_lane
 
         try:
             action = ActionChains(self.driver)
+
             action.click_and_hold(element)
             time.sleep(1)
             action.move_to_element(lane)
@@ -144,7 +151,8 @@ class VTBScanner():
 
             print('   Task dragged.')
             time.sleep(1.5)
-        except NoSuchElementException:
-            raise NoSuchElementException
+        except StaleElementReferenceException:
+            # hopefully this doesn't bite me back in the ass.
+            pass
         
         self.driver.switch_to.default_content()
