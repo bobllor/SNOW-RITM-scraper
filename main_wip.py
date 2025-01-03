@@ -6,9 +6,7 @@ from components.links import Links
 from selenium.common.exceptions import NoSuchFrameException, NoSuchElementException 
 from selenium.common.exceptions import ElementClickInterceptedException
 from misc.cust_except import AttemptsException
-from gui.table import TableGUI
 from functions.manual import ManualRITM
-import misc.text_formats, misc.timing
 import misc.menu as menu
 import os, traceback
 from log import logger
