@@ -3,7 +3,7 @@ from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, ElementClickInterceptedException, NoSuchFrameException
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import time, re, string
+import time, re
 
 class ScrapeRITM:
     def __init__(self, driver, ritm: str):
@@ -33,6 +33,27 @@ class ScrapeRITM:
             iframe = sr2.find_element(By.CSS_SELECTOR, 'iframe')
             
             self.driver.switch_to.frame(iframe)
+
+    def __exact_match_click(self) -> None:
+        # unfortunately, there are 8 shadow roots to go through...
+        sr1 = self.driver.find_element(By.CSS_SELECTOR, 'macroponent-f51912f4c700201072b211d4d8c26010').shadow_root
+        sr2 = sr1.find_element(By.CSS_SELECTOR, 'sn-canvas-appshell-main').shadow_root
+        sr3 = sr2.find_element(By.CSS_SELECTOR, 'macroponent-76a83a645b122010b913030a1d81c780').shadow_root
+        sr4 = sr3.find_element(By.CSS_SELECTOR, 'sn-canvas-main').shadow_root
+
+        # there are two sn-canvas-screen elements, the last one contains the link to click on.
+        sr5 = sr4.find_elements(By.CSS_SELECTOR, 'sn-canvas-screen')
+        sr6 = sr5[1].shadow_root.find_element(By.CSS_SELECTOR, 'macroponent-d4d3a42dc7202010099a308dc7c2602b').shadow_root
+
+        sr7 = sr6.find_element(By.CSS_SELECTOR, 'sn-search-result-wrapper').shadow_root
+        sr8 = sr7.find_element(By.CSS_SELECTOR, 'sn-component-workspace-global-search-tab').shadow_root
+
+        exact_match = sr8.find_element(By.CSS_SELECTOR, '.sn-list-group')
+
+        exact_match.click()
+        
+        # temp hold while i fix stuff.
+        time.sleep(15)
 
 
     def search_ritm(self):
@@ -68,7 +89,7 @@ class ScrapeRITM:
 
             global_search.send_keys(Keys.ENTER)
 
-            time.sleep(15)
+            time.sleep(10)
 
             print("   RITM search complete.")
             # reset search field to prepare it for future queries
@@ -86,23 +107,23 @@ class ScrapeRITM:
 
         Returns `True` if the searched page is a RITM ticket.
         '''
-        self.__switch_frame()
+        # the new SNOW no longer redirects to the ticket directly, my initial workaround is to use arrow down + enterto select the choice.
+        # it fails if the browser is minimized, so __exact_match_click() is used as well. can probably be fixed with --headless? haven't tested.
+        try:
+            self.__switch_frame()
+        except NoSuchElementException:
+            self.__exact_match_click()
+            self.__switch_frame()
 
         try:
-            blocked_items = {'return'}
+            blocked_items = {'return', 'asset management'}
             ticket_item = self.driver.find_element(By.CSS_SELECTOR, '.form-control.element_reference_input.readonly.disabled').get_attribute('value')
-
-            if ticket_item.lower() in blocked_items:
-                return False
         except NoSuchElementException:
             return False
 
-
-        return True
+        return True if ticket_item and ticket_item.lower() not in blocked_items else False
 
     def scrape_ritm(self):
-        #self.driver.switch_to.frame("gsft_main")
-
         req = self.scrape_req()
         time.sleep(2.5)
 
@@ -119,22 +140,23 @@ class ScrapeRITM:
         return date
 
     def scrape_name(self) -> list:
-        #self.driver.switch_to.frame('gsft_main')
-
+        # used in case the driver is not in the correct frame. only relevant after searching for RITMs.
+        self.driver.switch_to.default_content()
+        self.__switch_frame()
 
         # xpath of first and last name child containers
-        fn_xpath = '//tr[1]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
-        ln_xpath = '//tr[2]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[1]'
-        name_xpaths = [f"{self.consultant_info_xpath}{fn_xpath}", 
-                            f"{self.consultant_info_xpath}{ln_xpath}"]
+        fn_xpath = '//div[@id="container_row_23caec60e17c4a00c2ab91d15440c5ee"]//tr[1]//div[@class="col-xs-12 form-field input_controls sc-form-field "]//input[1]'
+        ln_xpath = '//div[@id="container_row_23caec60e17c4a00c2ab91d15440c5ee"]//tr[2]//div[@class="col-xs-12 form-field input_controls sc-form-field "]//input[1]'
+        name_xpaths = [f"{fn_xpath}", 
+                            f"{ln_xpath}"]
+        
         
         names = []
         for xpath in name_xpaths:
             element_xpath = self.driver.find_element(By.XPATH, xpath)
             part = element_xpath.get_attribute("value")
 
-            # checks if the name field has something else other than
-            # the name itself, such as C/O XX XX. should rarely occur.
+            # checks if the name field has something else other than the name itself, such as C/O XX XX. should rarely occur.
             if len(part.split()) > 3:
                 split_part = part.split()
                 part = split_part[0]
@@ -373,7 +395,7 @@ class ScrapeRITM:
         oid = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{oid_xpath}').get_attribute('value')
 
         # Not Listed and New Office in the oid field will change the xpaths for the office ID and location/name.
-        # on certain RITMs the oid_xpath is 23 instead of 24 (e.g. RITM0092364), in which case it ends up as an empty string.
+        # on certain RITMs the oid_xpath is 23 instead of 24, in which case it ends up as an empty string.
         if 'Not Listed' in oid or 'New Office - New Office' in oid or oid == '':
             oid_xpath = '//tr[25]//input[@class="cat_item_option sc-content-pad form-control"]'
             olocation_xpath = '//tr[26]//input[@class="cat_item_option sc-content-pad form-control"]'
@@ -381,8 +403,7 @@ class ScrapeRITM:
             oid = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{oid_xpath}').get_attribute('value')
             o_location = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{olocation_xpath}').get_attribute('value')
 
-            # modified oid string, due to the two fields being separate from each other.
-            # a new block of code will be used in format_office_id due to the double pipe.
+            # new code execution will be used in format_office_id if the double pipe exists.
             oid = f'{oid}||{o_location}'
 
         return oid
@@ -561,12 +582,3 @@ class ScrapeRITM:
                 # check if the last 5-6 digits are correct.
                 if pid_suffix.match(pid[4:]):
                     return pid
-                
-    def validate_RITM(self) -> bool:
-        '''Method used to check if the RITM is a valid RITM.
-
-        If an incorrect RITM is inputted, an empty search page is found instead of the actual ticket page.
-        
-        Returns `False` if the RITM is valid.
-        '''
-        pass
