@@ -67,7 +67,7 @@ class ManualRITM:
                     ritm_element = scanner.get_ritm_element(ritm)
 
                     if ritm_element:
-                        scanner.drag_task(ritm_element, 'RITM')
+                        scanner.drag_task(ritm_element)
                     else:
                         print(f'{ritm} is not found in the Requests lane.')
                     
@@ -78,7 +78,6 @@ class ManualRITM:
                     input('   Press "enter" to return back to the menu.')
 
     def file_input(self) -> list:
-        # tl;dr: return a list of RITMs which leads to a for loop of all RITMs.
         '''
         Creates users based on the CSV/XLSX input.
 
@@ -100,6 +99,7 @@ class ManualRITM:
                 try:
                     df = pd.read_csv(file)
                 except UnicodeDecodeError:
+                    # ?
                     df = pd.read_csv(file, encoding='windows-1254')
             else:
                 df = pd.read_excel(file)
@@ -121,17 +121,20 @@ class ManualRITM:
                 scraper = ScrapeRITM(self.driver, ritm)
                 scraper.search_ritm()
 
+                # TODO: fix the frame switching part for ScrapeRITM.
+                scraper.is_ritm()
+
                 sel.create_user(self.driver, scraper, ritm)
 
-                scanner = VTBScanner(self.driver, Links().vtb)
+                scanner = VTBScanner(self.driver, Links.new_vtb)
 
-                if self.driver.current_url != Links().vtb:
+                if self.driver.current_url != Links.new_vtb:
                     scanner.get_to_vtb()
                 
                 ritm_element = scanner.get_ritm_element(ritm)
 
                 if ritm_element:
-                    scanner.drag_task(ritm_element, 'RITM')
+                    scanner.drag_task(ritm_element)
                 else:
                     print(f'{ritm} is not found in the Requests lane.')
             
