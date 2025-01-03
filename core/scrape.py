@@ -55,7 +55,6 @@ class ScrapeRITM:
         # temp hold while i fix stuff.
         time.sleep(15)
 
-
     def search_ritm(self):
         # ensure that driver is not in a frame before performing a search.
         self.driver.switch_to.default_content()
@@ -112,7 +111,13 @@ class ScrapeRITM:
         try:
             self.__switch_frame()
         except NoSuchElementException:
-            self.__exact_match_click()
+            # hack fix, used for invalid RITM if this is thrown after a search.
+            # i can't really think of a better way to do this without rewriting the search logic. and i don't want to do that. sorry.
+            try:
+                self.__exact_match_click()
+            except NoSuchElementException:
+                return False
+            
             self.__switch_frame()
 
         try:

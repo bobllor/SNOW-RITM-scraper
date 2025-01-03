@@ -122,22 +122,25 @@ class ManualRITM:
                 scraper.search_ritm()
 
                 # TODO: fix the frame switching part for ScrapeRITM.
-                scraper.is_ritm()
+                is_correct = scraper.is_ritm()
 
-                sel.create_user(self.driver, scraper, ritm)
+                if is_correct:
+                    sel.create_user(self.driver, scraper, ritm)
 
-                scanner = VTBScanner(self.driver, Links.new_vtb)
+                    scanner = VTBScanner(self.driver, Links.new_vtb)
 
-                if self.driver.current_url != Links.new_vtb:
-                    scanner.get_to_vtb()
-                
-                ritm_element = scanner.get_ritm_element(ritm)
+                    if self.driver.current_url != Links.new_vtb:
+                        scanner.get_to_vtb()
+                    
+                    ritm_element = scanner.get_ritm_element(ritm)
 
-                if ritm_element:
-                    scanner.drag_task(ritm_element)
+                    if ritm_element:
+                        scanner.drag_task(ritm_element)
+                    else:
+                        print(f'{ritm} is not found in the Requests lane.')
                 else:
-                    print(f'{ritm} is not found in the Requests lane.')
-            
+                    print('   \nA bad RITM was read, skipping the process.')
+                
                 clear()
             except JavascriptException:
                 # unsure why this error happens. this is a "has no size and location" error.
