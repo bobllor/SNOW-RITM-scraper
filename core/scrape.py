@@ -221,7 +221,7 @@ class ScrapeRITM:
         '''
         self.driver.find_element(By.XPATH, '//button[@name="viewr.sc_req_item.request.requested_for"]').click()
         time.sleep(1)
-        req_element = self.driver.find_element(By.XPATH, '//input[@id="sys_readonly.sys_user.user_name"]')
+        req_element = self.driver.find_element(By.XPATH, '//input[@id="sys_readonly.sys_user.email"]')
 
         return req_element.get_attribute("value")
 
