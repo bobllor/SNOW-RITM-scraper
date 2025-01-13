@@ -859,89 +859,54 @@ class UserCreation:
             self.search_user_list(time_to_wait=5)
         else:
             self.search_user_list(time_to_wait=5, search_by_user=True)
-        
-        table_body_xpath = '//tr[@record_class="sys_user"]'
-        found = False
 
-        # commented this out, this is a new way of checking the users list. WIP.
-        '''obj = self.__get_user()
+        obj = self.__get_user()
 
         if not obj:
-            return False'''
-
-        # an exception is thrown if the table is empty.
-        try:
-            eid_xpath = self.driver.find_element(By.XPATH, f'{table_body_xpath}//td[11]')
-
-            # ensure that this is a valid employee ID to check. 
-            # often times the ID isn't given and is either 'TBD' or a repeating number.
-            if self.eid.isdigit() and not self.eid.strip(self.eid[0]):
-                self.eid = 'TBD'
-
-            if self.eid.lower() != 'tbd':
-                if eid_xpath.text == self.eid or eid_xpath.text[0:-1] == self.eid or eid_xpath.text[1:] == self.eid:
-                        print(f'   Employee ID matched! {self.eid}')
-                        found = True
-                        time.sleep(1)
-                
-            email_xpath = self.driver.find_element(By.XPATH, f'{table_body_xpath}//td[14]')
-            personal_email_xpath = self.driver.find_element(By.XPATH, f'{table_body_xpath}//td[15]')
-            email_texts = [email_xpath.text, personal_email_xpath.text]
-
-            # ensures this is a valid email before checking it. the email address is
-            # often there 95% of the time. most of the error checking occurs in scrape.py.
-            if self.email.lower() != 'tbd' or '@' not in self.email:
-                for email in email_texts:
-                    if self.email.lower() == email.lower():
-                        print(f'   Email address matched! {self.email}')
-                        found = True
-                        time.sleep(1)
-                        break
-            
-            if found:
-                self.existing_user = True
-                return True
-            else:
-                # if the user exists but the values do not match, increment the unique ID because this is a new unique user.
-                print('   A different user exists in the database, incrementing the unique ID by one.')
-                self.user_name_unique_id += 1
-        except NoSuchElementException:
-            # IF the unqiue ID was incremented, and an exception was thrown because the current username does not exist
-            # in the database (meaning that the incremented ID is completely unique), then break out of the loop above and
-            # create the new unique user with the new incremented ID.
+            # this is incremented in __get_user().
             if self.user_name_unique_id > 0:
                 self.duplicate_user = True
-    
-        return False
+
+            return False
+        
+        self.existing_user = True
+        return True
 
     def __get_user(self) -> object | None:
         '''Returns the web object of the matching user in the table.
         '''
-        # TODO: FINISH THIS.
         info_check = []
 
-        if self.eid.lower() != 'tbd':
-            info_check.append(self.eid)
-        
         if self.email.lower() != 'tbd' or '@' in self.email.lower():
+            info_check.append(self.email)
+
+        if self.eid.lower() != 'tbd':
             info_check.append(self.eid)
 
         try:
             self.driver.find_element(By.CLASS_NAME, 'list2_no_records')
-
-            return None
         except NoSuchElementException:
             list_row_odds = self.driver.find_elements(By.CSS_SELECTOR, '.list_row.list_odd')
             list_row_evens = self.driver.find_elements(By.CSS_SELECTOR, '.list_row.list_even')
 
-            table_objs = list_row_evens + list_row_odds
+            table_objs = list_row_odds + list_row_evens
 
-            for obj in table_objs:
+            for i, obj in enumerate(table_objs, start=1):
                 full_text = obj.text
 
                 for info in info_check:
                     if info in full_text:
+                        print(f'\n   {info} matches user entry {i}.\n')
+                        
+                        # reset is required because a future condition uses this value.
+                        if self.user_name_unique_id > 0:
+                            self.user_name_unique_id = 0
+
                         return obj
+                
+                # this is only relevant if a user exists, but a match isn't found.
+                print(f'\n   User entry {i} does not match. Incrementing the unique ID by one.\n')
+                self.user_name_unique_id += 1
             
             return None
 
