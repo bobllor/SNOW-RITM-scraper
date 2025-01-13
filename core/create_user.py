@@ -6,7 +6,8 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from components.blanket_admin import AdminRights
 from misc.cust_except import AttemptsException
-import time, re
+from components.links import Links
+import time
 
 # NOTE: still requires manual input if something goes wrong.
 class UserCreation:
@@ -293,8 +294,7 @@ class UserCreation:
 
         # this is used to prevent some recursion issue. i don't remember why and where it happened.
         if self.loop_once is False:
-            #user_link = 'https://tek.service-now.com/nav_to.do?uri=%2Fsys_user_list.do%3Fsysparm_clear_stack%3Dtrue%26sysparm_userpref_module%3D62354a4fc0a801941509bc63f8c4b979'
-            user_link = 'https://tek.service-now.com/sys_user_list.do?sysparm_clear_stack=true&sysparm_userpref_module=62354a4fc0a801941509bc63f8c4b979'
+            user_link = Links.user_list
 
             print("\n   Searching for user...")
             

@@ -2,14 +2,9 @@ from dataclasses import dataclass
 
 @dataclass
 class AdminRights:
-    # blanket admin rights:
-    # american airlines, microsoft, t-mobile, LSD saints/church of christ
-    # church mutual (staffing ONLY), do it best, frontier, altice
-    # apple, petsmart
     def __init__(self, company):
         self.company = company
 
-        # dictionary of blanket admins.
         self.blanket_dict = {
             'Altice': 'Altice',
             'American Airlines': 'American Airlines',
@@ -25,8 +20,12 @@ class AdminRights:
         }
 
     def check_blanket(self):
-        for key, value in self.blanket_dict.items():
-            if key.lower() in self.company.lower() or value.lower() in self.company.lower():
-                return True
+        company = self.company.lower()
+
+        if company in {key.lower() for key in self.blanket_dict.keys()}:
+            return True
+        
+        if self.company.lower() in {values.lower() for values in self.blanket_dict.values()}:
+            return True
 
         return False

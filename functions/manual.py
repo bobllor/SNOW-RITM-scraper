@@ -59,9 +59,9 @@ class ManualRITM:
                 if flag:
                     sel.create_user(self.driver, scraper, ritm)
 
-                    scanner = VTBScanner(self.driver, Links.new_vtb)
+                    scanner = VTBScanner(self.driver, Links.vtb)
 
-                    if self.driver.current_url != Links.new_vtb:
+                    if self.driver.current_url != Links.vtb:
                         scanner.get_to_vtb()
                     
                     ritm_element = scanner.get_ritm_element(ritm)
@@ -127,9 +127,9 @@ class ManualRITM:
                 if is_correct:
                     sel.create_user(self.driver, scraper, ritm)
 
-                    scanner = VTBScanner(self.driver, Links.new_vtb)
+                    scanner = VTBScanner(self.driver, Links.vtb)
 
-                    if self.driver.current_url != Links.new_vtb:
+                    if self.driver.current_url != Links.vtb:
                         scanner.get_to_vtb()
                     
                     ritm_element = scanner.get_ritm_element(ritm)
