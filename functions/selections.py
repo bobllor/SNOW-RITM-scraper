@@ -1,11 +1,11 @@
 from core.create_user import UserCreation
 from core.scrape import ScrapeRITM
-from selenium import webdriver
 from components.links import Links
 from tests.debug import debug_ritm_info
+from selenium.webdriver.chrome.webdriver import WebDriver
 import time
 
-def create_user(driver: webdriver, scraper: ScrapeRITM, ritm: str) -> None:
+def create_user(driver: WebDriver, scraper: ScrapeRITM, ritm: str) -> None:
     '''
     Creates the user to add into the database.
     '''

@@ -25,7 +25,7 @@ class AdminRights:
         if company in {key.lower() for key in self.blanket_dict.keys()}:
             return True
         
-        if self.company.lower() in {values.lower() for values in self.blanket_dict.values()}:
+        if company in {values.lower() for values in self.blanket_dict.values()}:
             return True
 
         return False
