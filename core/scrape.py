@@ -177,7 +177,7 @@ class ScrapeRITM:
 
         return names
 
-    def scrape_address(self) -> list:
+    def scrape_address(self) -> dict:
         # column xpath which divides the address container.
         column_xpath1 = '//div[@class="section-content catalog-section-content"]/div[1]'
         column_xpath2 = '//div[@class="section-content catalog-section-content"]/div[2]'
@@ -188,26 +188,21 @@ class ScrapeRITM:
         city_xpath = f'{column_xpath1}//tr[3]//div[@class="col-xs-12 form-field input_controls sc-form-field "]/input[2]'
         state_xpath = f'{column_xpath2}//tr[4]//option[@selected="SELECTED"]'
 
-        # ORDER: ADDRESS 1, ADDRESS 2, POSTAL, CITY, STATE.
-        address_xpaths = [f"{self.address_info_xpath}{street_one_xpath}",
-                          f"{self.address_info_xpath}{street_two_xpath}",
-                          f"{self.address_info_xpath}{postal_xpath}",
-                          f"{self.address_info_xpath}{city_xpath}",
-                          f"{self.address_info_xpath}{state_xpath}"]
+        address_xpaths = [('street_one', f"{self.address_info_xpath}{street_one_xpath}"),
+                          ('street_two', f"{self.address_info_xpath}{street_two_xpath}"),
+                          ('postal', f"{self.address_info_xpath}{postal_xpath}"),
+                          ('city', f"{self.address_info_xpath}{city_xpath}"),
+                          ('state', f"{self.address_info_xpath}{state_xpath}")]
 
-        address = []
+        address = {}
 
         for xpath in address_xpaths:
-            element_xpath = self.driver.find_element(By.XPATH, xpath)
+            element_xpath = self.driver.find_element(By.XPATH, xpath[1])
             part = element_xpath.get_attribute("value").strip()
 
-            address.append(part)
-        
-        for add_part in address:
-            if add_part == '' or add_part == ' ':
-                address.remove(add_part)
+            address[xpath[0]] = part
     
-        return " ".join(address)
+        return address
     
     def scrape_req(self) -> str:        
         element_xpath = self.driver.find_element(By.XPATH, self.req_xpath)

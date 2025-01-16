@@ -190,7 +190,6 @@ class UserCreation:
             '''Fills the required fields during the creation of a new user on the New User page.'''
 
             self.driver.get(self.link)
-            time.sleep(1)
             self.__switch_frames()
 
             self.__send_consultant_keys()
@@ -657,6 +656,7 @@ class UserCreation:
             name_field = self.driver.find_element(By.XPATH, '//input[@name="core_company.name"]')
             name_field.send_keys(self.company)
             time.sleep(1.5)
+
             save_button = self.driver.find_element(By.XPATH, '//button[@value="sysverb_insert_and_stay"]')
             save_button.click()
             time.sleep(1.5)
@@ -819,9 +819,7 @@ class UserCreation:
         '''Used to fill in the fields for first name, last name, and employee ID during user creation.'''
 
         self.driver.find_element(By.ID, "sys_user.first_name").send_keys(self.name[0])
-        time.sleep(1)
         self.driver.find_element(By.ID, "sys_user.last_name").send_keys(self.name[1])
-        time.sleep(1)
 
         # determine if employee ID needs to fill in TBD
         if self.eid.islower():
@@ -830,7 +828,6 @@ class UserCreation:
             self.eid = 'TBD'
 
         self.driver.find_element(By.ID, "sys_user.employee_number").send_keys(self.eid)
-        time.sleep(3)
     
     def __check_user_list(self, *, search_user_name: bool = False) -> bool:
         '''Checks if the user in the table, if they exist, is a duplicate or new user.
@@ -838,8 +835,6 @@ class UserCreation:
         If any matches, then the user in the table will be edited with `fill_user`.
         
         If a user exists but there are no matches, then the unique ID will increment by one when creating a new user.
-
-        If a `NoSuchElementException` is thrown, then a new user will be created accordingly.
 
         Parameters
         -------
