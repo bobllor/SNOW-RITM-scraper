@@ -20,10 +20,17 @@ def create_user(driver: WebDriver, scraper: ScrapeRITM, ritm: str) -> None:
 
     new_user = UserCreation(driver, Links.user_create, user_info, name, requestor)
     print("\n   Starting user creation process.")
-    time.sleep(3)
     new_user.create_user()
     print('\n   Label information:')
     print(f'\t   Ticket info: {" ".join(name)} {ritm} {req}')
     print(f'\t   Address: {address}')
     print(f'\t   Hardware: {requested_item} {" ".join(add_items)}')
     print(f'\t   Need by: {need_by}')
+
+    label_data = {
+        'name': " ".join(name),
+        'ritm': ritm,
+        'req': req,
+        'address': address,
+        'need_by_date': need_by
+    }
