@@ -28,16 +28,28 @@ def set_key_value(data: dict, target: str, value, *, blacklist: set = set()) -> 
 
     Returns `1` if the `dict` was successfully modified, else `0`.
 
-    Parameters
+    Required Parameters
     --------
-    `data`: A `dict` containing a key that is being modified.
+    `data`
+    
+    A `dict` containing a key that is being modified.
 
-    `target`: A `str` that is the target key to modify.
+    `target`
+    
+    A `str` that is the target key to modify.
 
-    `value`: The value that is overwriting the `data[key]` value. This can be any valid JSON variable.
+    `value`
+    
+    The value that is overwriting the `data[key]` value. This can be any valid JSON variable.
 
-    `blacklist`: Optional parameter, a set containing `str` elements that the function will skip over. 
-    This is only needed if the `dict` contains multiple keys of the same name.
+    Optional Parameters
+    -------
+
+    `blacklist`
+    
+    `set` containing `str` elements which the function will skip if it is in the `set`. 
+    
+    MUST ADD if the `dict` contains multiple keys of the same name at different nesting levels, else default is an empty `set`.
     '''    
     for key in data:
         var = data[key]
