@@ -1,4 +1,6 @@
 import requests
+from payload import get_metadata, get_payload
+from dict_utils import get_key_value, set_key_value
 
 class Response:
     '''Class used to get the response from a `POST` request.
@@ -43,7 +45,42 @@ class Response:
             'X-locale': "en_US",
             'Authorization': f"Bearer {token}"
         }
+
+        payload = self._payload_formatting(payload)
         
         response = requests.post(self.url + ship_end, data=payload, headers=headers, verify=False)
 
         return response.json()
+
+    def _payload_formatting(self, payload: dict) -> dict:
+        '''Used to format the payload into the proper FedEx json format.'''
+        contact = {
+            "personName": payload['name'],
+            "phoneNumber": 1234567890
+        }
+
+        street_lines = [get_key_value(payload, 'street_one')]
+
+        st_2 = get_key_value(payload, 'street_two')
+        if st_2:
+            street_lines.append(st_2)
+
+        postal = get_key_value(payload, 'postal')
+
+        address = {
+          "streetLines": street_lines,
+          "city": get_key_value(payload, 'city'),
+          "stateOrProvinceCode": get_key_value(payload, 'state'),
+          "postalCode": int(postal) if postal.isdigit() else postal,
+          # i'll do this properly in the future i guess.
+          "countryCode": 'US' if postal.isdigit() else 'CA'
+        }
+
+        fdx_payload = get_payload()
+
+        blacklist = {'shipper'}
+
+        set_key_value(fdx_payload, 'address', address, blacklist=blacklist)
+        set_key_value(fdx_payload, 'contact', contact, blacklist=blacklist)
+
+        return fdx_payload
