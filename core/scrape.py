@@ -73,6 +73,7 @@ class ScrapeRITM:
             except TimeoutException:
                 # used on the new SNOW, i do not know if this will be permanent or a temporary change.
                 # as of 10/8/2024, this seems temporary but putting this here for future proofing.
+                # UPDATE: as of 1/22/2025, this is permanent.
                 sr1 = self.driver.find_element(By.CSS_SELECTOR, 'macroponent-f51912f4c700201072b211d4d8c26010').shadow_root
                 sr2 = sr1.find_element(By.CSS_SELECTOR, 'sn-polaris-layout').shadow_root
                 sr3 = sr2.find_element(By.CSS_SELECTOR, 'sn-polaris-header').shadow_root

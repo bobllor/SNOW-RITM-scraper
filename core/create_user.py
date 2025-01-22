@@ -306,6 +306,10 @@ class UserCreation:
             time.sleep(time_to_wait)
             user_search = self.driver.find_element(By.XPATH, search)
 
+            # HACK: very terrible edge case regarding an idiot named PML.
+            if self.email == self.requestor:
+                self.email = self.user_name
+
             if not search_by_user:
                 if self.eid != 'TBD' and not self.eid_search:
                     user_search.send_keys(self.eid)

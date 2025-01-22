@@ -1,8 +1,9 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.common.exceptions import NoSuchElementException, TimeoutException, StaleElementReferenceException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, StaleElementReferenceException, JavascriptException
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.keys import Keys
 import time
 '''
 how the VTBScanner works:
@@ -144,15 +145,25 @@ class VTBScanner():
             action = ActionChains(self.driver)
 
             action.click_and_hold(element)
+
             time.sleep(1)
+
             action.move_to_element(lane)
+
             time.sleep(1)
+
             action.release(lane).perform()
 
             print('   Task dragged.')
-            time.sleep(1.5)
         except StaleElementReferenceException:
             # hopefully this doesn't bite me back in the ass.
             pass
+        except JavascriptException:
+            # used to handle elements that are not in scroll view. should happen very rarely.
+            body_element = self.driver.find_element(By.CSS_SELECTOR, 'body')
+            body_element.click()
+            body_element.send_keys(Keys.PAGE_DOWN)
+
+            self.drag_task(element)
         
         self.driver.switch_to.default_content()
