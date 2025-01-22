@@ -1,9 +1,15 @@
 from core.create_user import UserCreation
 from core.scrape import ScrapeRITM
 from components.links import Links
-from tests.debug import debug_ritm_info
 from selenium.webdriver.chrome.webdriver import WebDriver
-import time
+from fdx.response_data import Response
+from fdx.dict_utils import get_key_value
+import webbrowser, json
+
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 def create_user(driver: WebDriver, scraper: ScrapeRITM, ritm: str) -> None:
     '''
@@ -16,7 +22,6 @@ def create_user(driver: WebDriver, scraper: ScrapeRITM, ritm: str) -> None:
     need_by = scraper.scrape_need_by_date()
     requested_item, add_items = scraper.scrape_hardware()
     requestor = scraper.scrape_requestor()
-    debug_ritm_info(user_info, name)
 
     new_user = UserCreation(driver, Links.user_create, user_info, name, requestor)
     print("\n   Starting user creation process.")
@@ -34,3 +39,22 @@ def create_user(driver: WebDriver, scraper: ScrapeRITM, ritm: str) -> None:
         'address': address,
         'need_by_date': need_by
     }
+
+    ak = os.getenv('api')
+    sk = os.getenv('secret')
+
+    create_label(ak, sk, label_data)
+
+def create_label(api: str, secret: str, label_info: dict):
+    lab = Response(api, secret)
+
+    payload = lab.get_fdx_payload(label_info, blacklist={'shipper'})
+    payload = json.dumps(payload)
+
+    token = lab.get_auth_token()
+    response = lab.get_response(token, payload)
+    
+    if not isinstance(response, int):
+        url = get_key_value(response, 'url')
+
+        webbrowser.open(url)
