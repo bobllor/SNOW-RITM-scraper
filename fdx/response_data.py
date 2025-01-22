@@ -1,6 +1,6 @@
 import requests
-from payload import get_metadata, get_payload
-from dict_utils import get_key_value, set_key_value
+from .payload import get_metadata, get_payload
+from .dict_utils import get_key_value, set_key_value
 
 class Response:
     '''Class used to get the response from a `POST` request.
@@ -45,14 +45,12 @@ class Response:
             'X-locale': "en_US",
             'Authorization': f"Bearer {token}"
         }
-
-        payload = self._payload_formatting(payload)
         
         response = requests.post(self.url + ship_end, data=payload, headers=headers, verify=False)
 
         return response.json()
 
-    def _payload_formatting(self, payload: dict) -> dict:
+    def get_fdx_payload(self, payload: dict, *, blacklist: set[str] = set()) -> dict:
         '''Used to format the payload into the proper FedEx json format.'''
         contact = {
             "personName": payload['name'],
@@ -77,8 +75,6 @@ class Response:
         }
 
         fdx_payload = get_payload()
-
-        blacklist = {'shipper'}
 
         set_key_value(fdx_payload, 'address', address, blacklist=blacklist)
         set_key_value(fdx_payload, 'contact', contact, blacklist=blacklist)
