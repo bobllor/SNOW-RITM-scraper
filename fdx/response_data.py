@@ -55,7 +55,11 @@ class Response:
         return response.json()
 
     def get_fdx_payload(self, payload: dict, *, blacklist: set[str] = set()) -> dict:
-        '''Used to format the payload into the proper FedEx json format.'''
+        '''Used to format the payload into the proper FedEx json format.
+        
+        Parameters
+        ----------
+        '''
         contact = {
             "personName": payload['name'],
             "phoneNumber": 1234567890
@@ -84,3 +88,9 @@ class Response:
         set_key_value(fdx_payload, 'contact', contact, blacklist=blacklist)
 
         return fdx_payload
+
+    def _get_fedex_service(self, need_by: str) -> str:
+        '''Retrieve the FedEx service type by calculating the days with the `need_by` input.'''
+    
+    def _get_requested_packages(self, hardware_list: list) -> list:
+        '''Retrieve the amount of packages that are being sent out. This creates X shipping/return labels.'''

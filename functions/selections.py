@@ -13,7 +13,7 @@ load_dotenv()
 
 def create_user(driver: WebDriver, scraper: ScrapeRITM, ritm: str) -> None:
     '''
-    Creates the user to add into the database.
+    Creates the user to add into the database, and generates the label that goes with the user.
     '''
     print("\n   Obtaining information for user creation...")
     name = scraper.scrape_name()
@@ -37,7 +37,9 @@ def create_user(driver: WebDriver, scraper: ScrapeRITM, ritm: str) -> None:
         'ritm': ritm,
         'req': req,
         'address': address,
-        'need_by_date': need_by
+        'need_by_date': need_by,
+        'hardware': [requested_item] + [add_items],
+        'account_number': os.getenv('account')
     }
 
     ak = os.getenv('api')
