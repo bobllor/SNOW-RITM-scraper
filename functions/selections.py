@@ -52,9 +52,14 @@ def create_label(api: str, secret: str, label_info: dict):
     payload = json.dumps(payload)
 
     token = lab.get_auth_token()
-    response = lab.get_response(token, payload)
     
-    if not isinstance(response, int):
+    if not isinstance(token, list):
+        response = lab.get_response(token, payload)
+        
         url = get_key_value(response, 'url')
 
         webbrowser.open(url)
+
+        print('\n   Label generated.')
+    else:
+        raise TypeError(f'ERROR: {response[0]}. Message: {response[1]}')
