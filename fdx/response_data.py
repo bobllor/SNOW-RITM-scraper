@@ -17,7 +17,11 @@ class Response:
         self.secret_key = secret_key
         self.url = 'https://apis-sandbox.fedex.com'
 
-    def get_auth_token(self) -> str | int:
+    def get_auth_token(self) -> str | list[int, str]:
+        '''Returns a authentication token with the given credentials.
+
+        If there is an error, a `list` is returned containing the status code `int` and the error message `str`.
+        '''
         auth_end = '/oauth/token'
 
         payload = {
@@ -33,7 +37,7 @@ class Response:
         response = requests.post(self.url + auth_end, data=payload, headers=headers, verify=False)
 
         if response.status_code != 200:
-            return response
+            return [response.status_code, get_key_value(response.json(), 'message')]
 
         return response.json()['access_token']
 
