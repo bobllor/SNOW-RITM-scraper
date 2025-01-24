@@ -84,6 +84,9 @@ class Response:
 
         fdx_payload = get_payload()
 
+        set_key_value(fdx_payload, 'account', 
+                      {'accountNumber': {'value': payload['account_number']}}, 
+                      blacklist=blacklist)
         set_key_value(fdx_payload, 'address', address, blacklist=blacklist)
         set_key_value(fdx_payload, 'contact', contact, blacklist=blacklist)
 

@@ -20,7 +20,7 @@ def create_user(driver: WebDriver, scraper: ScrapeRITM, ritm: str) -> None:
     req, address = scraper.scrape_ritm()
     user_info = scraper.scrape_user_info()
     need_by = scraper.scrape_need_by_date()
-    requested_item, add_items = scraper.scrape_hardware()
+    requested_items = scraper.scrape_hardware()
     requestor = scraper.scrape_requestor()
 
     new_user = UserCreation(driver, Links.user_create, user_info, name, requestor)
@@ -29,7 +29,7 @@ def create_user(driver: WebDriver, scraper: ScrapeRITM, ritm: str) -> None:
     print('\n   Label information:')
     print(f'\t   Ticket info: {" ".join(name)} {ritm} {req}')
     print(f'\t   Address: {address}')
-    print(f'\t   Hardware: {requested_item} {" ".join(add_items)}')
+    print(f'\t   Hardware: {" ".join(requested_items)}')
     print(f'\t   Need by: {need_by}')
 
     label_data = {
@@ -38,7 +38,7 @@ def create_user(driver: WebDriver, scraper: ScrapeRITM, ritm: str) -> None:
         'req': req,
         'address': address,
         'need_by_date': need_by,
-        'hardware': [requested_item] + [add_items],
+        'hardware': requested_items,
         'account_number': os.getenv('account')
     }
 
@@ -54,14 +54,21 @@ def create_label(api: str, secret: str, label_info: dict):
     payload = json.dumps(payload)
 
     token = lab.get_auth_token()
+
+    if isinstance(token, list):
+        raise TypeError(f'   ERROR: {response[0]}\n   MESSAGE: {response[1]}')
     
     if not isinstance(token, list):
         response = lab.get_response(token, payload)
         
         url = get_key_value(response, 'url')
+        
+        if url is not None:
+            webbrowser.open(url)
 
-        webbrowser.open(url)
-
-        print('\n   Label generated.')
-    else:
-        raise TypeError(f'ERROR: {response[0]}. Message: {response[1]}')
+            print('\n   Label generated.')
+        else:
+            raise TypeError(
+                f'   ERROR: {get_key_value(response, 'code')}\n   MESSAGE: {get_key_value(response, 'message')}'
+            )
+        

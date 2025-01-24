@@ -221,24 +221,19 @@ class ScrapeRITM:
 
         return req_element.get_attribute("value")
 
-    # hardware options that the requestor checked, in addition to the main item.
-    def scrape_hardware(self):
+    def scrape_hardware(self) -> list:
         hardware_container = '//span[@id="question_container_d7af38e4e17c4a00c2ab91d15440c571"]'
         checked_xpath = f'{hardware_container}/div[2]/div[1]//input[@checked="checked"]'
         checked_obj_list = self.driver.find_elements(By.XPATH, checked_xpath)
+        items = []
 
         # the main item that is being requested/wanted.
         requested_item_xpath = '//input[@id="sys_display.sc_req_item.cat_item"]'
         requested_item = self.driver.find_element(By.XPATH, requested_item_xpath).get_attribute("value")
-
-        time.sleep(2)
-
-        items = []
+        
         if checked_obj_list:
             text_xpath = f'{checked_xpath}/following-sibling::label'
             text_obj_list = self.driver.find_elements(By.XPATH, text_xpath)
-
-            time.sleep(2)
 
             if text_obj_list:
                 for obj in text_obj_list:
@@ -249,7 +244,9 @@ class ScrapeRITM:
                 if 'Add' in item:
                     items[index] = item.replace('Add', '').lstrip()
         
-        return requested_item, items
+        items.insert(0, requested_item)
+
+        return items
     
     def scrape_user_info(self) -> dict:
         '''
