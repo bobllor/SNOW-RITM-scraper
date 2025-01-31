@@ -56,6 +56,8 @@ def set_key_value(data: dict, target: str, value: any, *, blacklist: set[str] = 
             result = set_key_value(var, target, value, blacklist=blacklist)
         elif isinstance(var, list):
             for ele in var:
+                if type(ele) not in [list, dict]:
+                    continue
                 result = set_key_value(ele, target, value, blacklist=blacklist)
             
         if result:
