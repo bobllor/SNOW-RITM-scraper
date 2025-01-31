@@ -84,11 +84,11 @@ class Response:
 
         fdx_payload = get_payload()
 
+        set_key_value(fdx_payload, 'accountNumber', 
+                      {'value': get_key_value(payload, 'account_number')}, 
+                      blacklist=blacklist)
         set_key_value(fdx_payload, 'address', address, blacklist=blacklist)
         set_key_value(fdx_payload, 'contact', contact, blacklist=blacklist)
-
-        # i am not sure why but this removes the "unauthorized account" TypeError...
-        fdx_payload['accountNumber']['value'] = payload['account_number']
 
         return fdx_payload
 
