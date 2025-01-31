@@ -328,8 +328,7 @@ class UserCreation:
 
             time.sleep(1)
             print("   User search completed.")
-
-    # used for both filling and checking the user information.        
+      
     def fill_user(self):
         '''Edits the table cells for the current user once a search is completed.'''
         # this is used to prevent some recursion issue.
@@ -894,7 +893,7 @@ class UserCreation:
                 full_text = obj.text
 
                 for info in info_check:
-                    if info in full_text:
+                    if info.lower() in full_text.lower():
                         print(f'\n   {info} matches user entry {i}.\n')
                         
                         # reset is required because a future condition uses this value.
