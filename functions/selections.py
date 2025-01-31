@@ -4,7 +4,8 @@ from components.links import Links
 from selenium.webdriver.chrome.webdriver import WebDriver
 from fdx.response_data import Response
 from fdx.dict_utils import get_key_value
-import webbrowser, json
+from log import logger
+import webbrowser, json, traceback
 
 from dotenv import load_dotenv
 import os
@@ -42,10 +43,15 @@ def create_user(driver: WebDriver, scraper: ScrapeRITM, ritm: str) -> None:
         'account_number': os.getenv('account')
     }
 
-    ak = os.getenv('api')
-    sk = os.getenv('secret')
-
-    create_label(ak, sk, label_data)
+    if label_data['address']['street_one'] != '':
+        ak = os.getenv('api')
+        sk = os.getenv('secret')
+        
+        try:
+            create_label(ak, sk, label_data)  
+        except TypeError:
+            print(f'\n   ERROR: Issue with creating shipment. Logging file and continuing.')
+            logger(traceback.format_exc())
 
 def create_label(api: str, secret: str, label_info: dict):
     lab = Response(api, secret)
