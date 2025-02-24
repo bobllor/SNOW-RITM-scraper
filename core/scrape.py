@@ -90,7 +90,7 @@ class ScrapeRITM:
 
             global_search.send_keys(Keys.ENTER)
 
-            time.sleep(10)
+            time.sleep(13.5)
 
             print("   RITM search complete.")
             # reset search field to prepare it for future queries
