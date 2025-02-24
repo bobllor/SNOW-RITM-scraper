@@ -43,7 +43,7 @@ def create_user(driver: WebDriver, scraper: ScrapeRITM, ritm: str) -> None:
         'account_number': os.getenv('account')
     }
 
-    if label_data['address']['street_one'] != '':
+    '''if label_data['address']['street_one'] != '':
         ak = os.getenv('api')
         sk = os.getenv('secret')
         
@@ -52,7 +52,7 @@ def create_user(driver: WebDriver, scraper: ScrapeRITM, ritm: str) -> None:
         except TypeError:
             print(f'\n   ERROR: Issue with creating shipment. Logging file and continuing.')
             logger(traceback.format_exc())
-
+'''
 def create_label(api: str, secret: str, label_info: dict):
     lab = Response(api, secret)
 

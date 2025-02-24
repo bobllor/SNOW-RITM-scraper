@@ -5,6 +5,7 @@ from tkinter import filedialog
 from pathlib import Path
 from selenium.common.exceptions import JavascriptException, StaleElementReferenceException, NoSuchElementException
 from . import selections as sel
+from core.vtb_scanner import VTBScanner
 import re, os
 import pandas as pd
 
@@ -12,14 +13,11 @@ clear: None = lambda: os.system('cls') if os.name == 'nt' else 'clear'
 
 class ManualRITM:
     '''
-    Takes an input which is then used to scrape the ticket and creates the user into the SNOW database.
-
-    Has two methods:
-        1. `ManualRITM.manual_input` takes a single RITM input.
-        2. `ManualRITM.file_input` takes a CSV or XLSX input using filedialog.
+    Manual interaction to add the user into the SNOW database.
     '''
-    def __init__(self, driver):
+    def __init__(self, driver, link):
         self.driver = driver
+        self.scanner = VTBScanner(driver, link)
 
     def manual_input(self):
         # TODO: allow multiple RITMs in a string, as well as an option to read a csv/xlxs of RITMs.
@@ -51,7 +49,7 @@ class ManualRITM:
 
             if ritm_checker.match(ritm):
                 print("\n   Searching for RITM...")
-                scraper = ScrapeRITM(self.driver, ritm)
+                scraper = ScrapeRITM(self.driver)
                 scraper.search_ritm()
 
                 flag = scraper.is_ritm()
@@ -118,7 +116,7 @@ class ManualRITM:
         for ritm in ritms:
             try:
                 print(f"\n   Searching for {ritm}...")
-                scraper = ScrapeRITM(self.driver, ritm)
+                scraper = ScrapeRITM(self.driver)
                 scraper.search_ritm()
 
                 # TODO: fix the frame switching part for ScrapeRITM.
@@ -166,3 +164,35 @@ class ManualRITM:
                     
                 # same thing as above. please save my ass.
                 raise NoSuchElementException
+    
+    def scan_vtb(self):
+        '''Scan the VTB for any current tickets.
+        
+        This creates users for all tickets (other than INC), including software.
+        '''
+        self.scanner.get_to_vtb()
+
+        ritms = self.scanner.get_ritm_number()
+
+        ritm_list = [ritm.text for ritm in ritms]
+        # TODO: refactor the classes... please. or at least finish my custom library. 2/24/2025
+
+        print(f'   Found {len(ritms)} {'RITMs'}.')
+
+        if len(ritm_list) > 0:
+            for ritm in ritm_list:
+                scraper = ScrapeRITM(self.driver)
+                scraper.search_ritm(ritm)
+
+                if scraper.is_ritm():
+                    sel.create_user(self.driver, scraper, ritm)
+                    self.scanner.get_to_vtb()
+                    ritm_ele = self.scanner.get_ritm_element(ritm)
+
+                    if ritm_ele is None:
+                        print(f'   Error with grabbing element, skipping the {ritm}.')
+                        continue
+
+                    self.scanner.drag_task(ritm_ele)
+                else:
+                    print('   Issue with search. Skipping the RITM.')
