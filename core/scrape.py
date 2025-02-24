@@ -5,10 +5,11 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time, re
 
+from selenium.webdriver.chrome.webdriver import WebDriver
+
 class ScrapeRITM:
-    def __init__(self, driver, ritm: str):
+    def __init__(self, driver: WebDriver):
         self.driver = driver
-        self.ritm = ritm
 
         # these are containers that need to be accessed before being able to grab the values
         self.consultant_info_xpath = '//tr[@id="element.container_23caec60e17c4a00c2ab91d15440c5ee"]'
@@ -55,7 +56,7 @@ class ScrapeRITM:
         # temp hold while i fix stuff.
         time.sleep(15)
 
-    def search_ritm(self):
+    def search_ritm(self, ritm: str):
         # ensure that driver is not in a frame before performing a search.
         self.driver.switch_to.default_content()
 
@@ -69,7 +70,7 @@ class ScrapeRITM:
                 global_search_xpath = '//input[@name="sysparm_search"]'
                 global_search = WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.XPATH, global_search_xpath)))
 
-                global_search.send_keys(self.ritm)
+                global_search.send_keys(ritm)
             except TimeoutException:
                 # used on the new SNOW, i do not know if this will be permanent or a temporary change.
                 # as of 10/8/2024, this seems temporary but putting this here for future proofing.
@@ -82,7 +83,7 @@ class ScrapeRITM:
 
                 global_search = sr5.find_element(By.CSS_SELECTOR, '.sn-global-typeahead').find_element(By.TAG_NAME, 'input')
 
-                global_search.send_keys(self.ritm)
+                global_search.send_keys(ritm)
                 time.sleep(1)
                 global_search.send_keys(Keys.ARROW_DOWN)
                 time.sleep(.2)
@@ -159,7 +160,8 @@ class ScrapeRITM:
         
         names = []
         for xpath in name_xpaths:
-            element_xpath = self.driver.find_element(By.XPATH, xpath)
+            element_xpath = WebDriverWait(self.driver, 8).until(
+                EC.presence_of_element_located((By.XPATH, xpath)))
             part = element_xpath.get_attribute("value")
 
             # checks if the name field has something else other than the name itself, such as C/O XX XX. should rarely occur.

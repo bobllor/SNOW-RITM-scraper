@@ -58,23 +58,17 @@ class VTBScanner():
         '''
         self.__switch_frames()
 
-        ritm = None
+        ritm_elements = None
         try:
             ritm_elements = WebDriverWait(self.driver, 15).until(
                 EC.presence_of_all_elements_located((By.XPATH, f'{self.req_lane}//a[contains(text(), "RITM")]'))
             )
-
-            if len(ritm_elements) > 0:
-                for element in ritm_elements:
-                    if element.text not in self.blacklist:
-                        ritm = element.text
-                        break
         except TimeoutException:
             pass
         
         self.driver.switch_to.default_content()
 
-        return ritm
+        return ritm_elements
 
     def get_ritm_element(self, ritm: str):
         '''
@@ -82,9 +76,7 @@ class VTBScanner():
 
         If a RITM element is not found, it returns None.
         '''
-        # NOTE: this is going to be ran indefinitely as it will be scanning the VTB for any incoming tasks.
-        # xpath to the lane which contains the items to look for.
-        self.__switch_frames()
+        #self.__switch_frames()
         
         try:
             ritm_elements = WebDriverWait(self.driver, 6).until(
@@ -133,10 +125,13 @@ class VTBScanner():
         '''
         self.__switch_frames()
 
-        if not is_inc:
-            lane = self.driver.find_element(By.XPATH, '//li[@v-lane-index="1" and @h-lane-index="0"]')
-        else:
-            lane = self.driver.find_element(By.XPATH, '//li[@v-lane-index="2" and @h-lane-index="0"]')
+        lane_path = '//li[@v-lane-index="1" and @h-lane-index="0"]' if is_inc is False else '//li[@v-lane-index="2" and @h-lane-index="0"]'
+        try:
+            lane = WebDriverWait(self.driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, lane_path)))
+        except TimeoutException:
+            return
+        
 
         # selects the parent of the element (div). prevents: 1. clicking on the href & 2. having a javascript no size error.
         element = element.find_element(By.XPATH, '..')
