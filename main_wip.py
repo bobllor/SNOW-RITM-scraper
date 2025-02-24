@@ -8,7 +8,7 @@ from selenium.common.exceptions import ElementClickInterceptedException
 from misc.cust_except import AttemptsException
 from functions.manual import ManualRITM
 import misc.menu as menu
-import os, traceback
+import os, traceback    
 from log import logger
 
 if __name__ == '__main__':
@@ -39,7 +39,7 @@ if __name__ == '__main__':
                 print('WIP sorry!')
 
             if menu_choice == 'm':
-                man = ManualRITM(driver)
+                man = ManualRITM(driver, os.getenv('vtb'))
                 menu.display_manual_menu()
                 manual_choice = menu.manual_choice()
 
@@ -49,6 +49,8 @@ if __name__ == '__main__':
                 if manual_choice == 'f':
                     # uses a csv/xlsx input to get a list of RITMs.
                     man.file_input()
+                if manual_choice == 's':
+                    man.scan_vtb()
 
             if menu_choice == 'c':
                 print('WIP sorry!')
@@ -57,12 +59,10 @@ if __name__ == '__main__':
             print('\n   CRITICAL ERROR: Something went wrong during the process. The error has been logged.')
             logger(traceback.format_exc())
         except AttemptsException:
-            print('\n   ERROR: Too many attempts were repeated, the RITM is blacklisted.')
+            print('\n   ERROR: Too many attempts were repeated')
             logger(traceback.format_exc())
         except ElementClickInterceptedException:
             print('\n   ERROR: Something went wrong during the process. Please try again.')
-        except TypeError as e:
-            print(f'\n   {e}')
         except KeyboardInterrupt:
             print('   KEYBOARD INTERRUPTION. Closing operation.')
             break
