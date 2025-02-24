@@ -31,9 +31,10 @@ def main_menu_choice() -> str:
 def display_manual_menu():
     print(text_format('[m] Manual input - Manually enter an RITM to create users'))
     print(text_format('[f] File input - Select a CSV/XLSX for create users'))
+    print(text_format('[s] Scan VTB - Scan the VTB for a list of elements'))
     print(quit_text)
 
 def manual_choice() -> str:
-    valid_choices = ('m', 'f', 'q')
+    valid_choices = ('m', 'f', 'q', 's')
     
     return get_choice(valid_choices)
