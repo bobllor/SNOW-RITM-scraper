@@ -18,19 +18,12 @@ open to VTB > scan the VTB lane > grab task number(s) > insert task number into 
 create the user > move task number(s) to the correct lane > repeat from beginning
 '''
 
-class VTBScanner():
-    def __init__(self, driver, link, blacklist=None):
+class VTBScanner:
+    def __init__(self, driver, blacklist=None):
         self.driver = driver
-        self.vtb_link = link
         self.blacklist = set() if blacklist is None else blacklist
 
         self.req_lane = '//li[@v-lane-index="0" and @h-lane-index="0"]'
-    
-    def get_to_vtb(self) -> None:
-        '''
-        Sends the driver to the VTB directly.
-        '''
-        self.driver.get(self.vtb_link)
 
     def __switch_frames(self):
         '''
