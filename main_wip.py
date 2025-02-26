@@ -12,7 +12,7 @@ import os, traceback
 from log import logger
 
 if __name__ == '__main__':
-    clear: None = lambda: os.system('cls') if os.name == 'nt' else 'clear'
+    clear = lambda: os.system('cls') if os.name == 'nt' else 'clear'
 
     options = Options()
     options.add_experimental_option("detach", True)
@@ -39,7 +39,7 @@ if __name__ == '__main__':
                 print('WIP sorry!')
 
             if menu_choice == 'm':
-                man = ManualRITM(driver, os.getenv('vtb'))
+                man = ManualRITM(driver)
                 menu.display_manual_menu()
                 manual_choice = menu.manual_choice()
 
