@@ -6,6 +6,7 @@ from pathlib import Path
 from selenium.common.exceptions import JavascriptException, StaleElementReferenceException, NoSuchElementException
 from . import selections as sel
 from core.vtb_scanner import VTBScanner
+from selenium.webdriver.chrome.webdriver import WebDriver
 import re, os
 import pandas as pd
 
@@ -15,9 +16,9 @@ class ManualRITM:
     '''
     Manual interaction to add the user into the SNOW database.
     '''
-    def __init__(self, driver, link):
+    def __init__(self, driver: WebDriver):
         self.driver = driver
-        self.scanner = VTBScanner(driver, link)
+        self.scanner = VTBScanner(driver)
 
     def manual_input(self):
         # TODO: allow multiple RITMs in a string, as well as an option to read a csv/xlxs of RITMs.
@@ -50,22 +51,20 @@ class ManualRITM:
             if ritm_checker.match(ritm):
                 print("\n   Searching for RITM...")
                 scraper = ScrapeRITM(self.driver)
-                scraper.search_ritm()
+                scraper.search_ritm(ritm)
 
                 flag = scraper.is_ritm()
 
                 if flag:
                     sel.create_user(self.driver, scraper, ritm)
 
-                    scanner = VTBScanner(self.driver, Links.vtb)
-
                     if self.driver.current_url != Links.vtb:
-                        scanner.get_to_vtb()
+                        self.driver.get(Links.vtb)
                     
-                    ritm_element = scanner.get_ritm_element(ritm)
+                    ritm_element = self.scanner.get_ritm_element(ritm)
 
                     if ritm_element:
-                        scanner.drag_task(ritm_element)
+                        self.scanner.drag_task(ritm_element)
                     else:
                         print(f'{ritm} is not found in the Requests lane.')
                     
@@ -117,7 +116,7 @@ class ManualRITM:
             try:
                 print(f"\n   Searching for {ritm}...")
                 scraper = ScrapeRITM(self.driver)
-                scraper.search_ritm()
+                scraper.search_ritm(ritm)
 
                 # TODO: fix the frame switching part for ScrapeRITM.
                 is_correct = scraper.is_ritm()
@@ -125,17 +124,15 @@ class ManualRITM:
                 if is_correct:
                     sel.create_user(self.driver, scraper, ritm)
 
-                    scanner = VTBScanner(self.driver, Links.vtb)
-
                     if self.driver.current_url != Links.vtb:
-                        scanner.get_to_vtb()
+                        self.driver.get(Links.vtb)
                     
-                    ritm_element = scanner.get_ritm_element(ritm)
+                    ritm_element = self.scanner.get_ritm_element(ritm)
 
                     if ritm_element:
-                        scanner.drag_task(ritm_element)
+                        self.scanner.drag_task(ritm_element)
                     else:
-                        print(f'{ritm} is not found in the Requests lane.')
+                        print(f'   {ritm} is not found in the Requests lane.')
                 else:
                     print('   \nA bad RITM was read, skipping the process.')
                 
@@ -154,7 +151,7 @@ class ManualRITM:
                 # make a proper exception for this. hopefully this does not bite my ass.
                 raise NoSuchElementException
             except StaleElementReferenceException:
-                print('ERROR: Element is stale. Contiuing the process.')
+                print('   ERROR: Element is stale. Contiuing the process.')
                 flag = False
 
                 if not flag:
@@ -170,7 +167,7 @@ class ManualRITM:
         
         This creates users for all tickets (other than INC), including software.
         '''
-        self.scanner.get_to_vtb()
+        self.driver.get(Links.vtb)
 
         ritms = self.scanner.get_ritm_number()
 
@@ -186,7 +183,7 @@ class ManualRITM:
 
                 if scraper.is_ritm():
                     sel.create_user(self.driver, scraper, ritm)
-                    self.scanner.get_to_vtb()
+                    self.driver.get(Links.vtb)
                     ritm_ele = self.scanner.get_ritm_element(ritm)
 
                     if ritm_ele is None:
