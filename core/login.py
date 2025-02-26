@@ -1,14 +1,15 @@
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from getpass import getpass
 import time
 
 class Login:
-    def __init__(self, driver, link, user, pw):
+    def __init__(self, driver, link, user: str = None, pw: str = None):
         self.driver = driver
         self.link = link
-        self.user = user
-        self.pw = pw
+        self.user = user if user else input('Enter your username: ')
+        self.pw = pw if pw else getpass('Enter your password: ')
     
     def login_sn(self):
         '''
