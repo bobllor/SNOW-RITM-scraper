@@ -1,9 +1,11 @@
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.webdriver import WebDriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, NoSuchFrameException
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.remote.webelement import WebElement
 from components.blanket_admin import AdminRights
 from misc.cust_except import AttemptsException
 from components.links import Links
@@ -54,30 +56,27 @@ class UserCreation:
     Determines if the user is an admin or not. By default `False`.
     '''
     
-    def __init__(self, driver, link: str, user_info: dict, name: list, requestor: str, admin=False):
-        self.driver = driver
+    def __init__(self, driver, link: str, user_info: dict, name: list[str], requestor: str, admin=False):
+        self.driver: WebDriver = driver
         self.link = link
-        self.name = name
-        self.requestor = requestor
+        self.name: list[str] = name
+        self.requestor: str = requestor
+        self.actions: ActionChains = ActionChains(driver)
 
-        self.email = user_info['email'].strip()
-        self.eid = user_info['e_id']
-        self.div = user_info['division']
-        self.cid = user_info['c_id']
-        self.company = user_info['company']
-        self.oid = user_info['o_id']
-        self.pid = user_info['p_id']
-        self.org = user_info['org']
-        self.oid_location = user_info['o_id_loc']
+        self.email: str = user_info['email'].strip()
+        self.eid: str = user_info['e_id']
+        self.div: str = user_info['division']
+        self.cid: str = user_info['c_id']
+        self.company: str = user_info['company']
+        self.oid: str = user_info['o_id']
+        self.pid: str = user_info['p_id']
+        self.org: str = user_info['org']
+        self.oid_location: str = user_info['o_id_loc']
 
         self.admin = AdminRights(self.company).check_blanket() if not admin else admin
 
         # initialized in a future function call, this is necessary because of potential duplicate users.
         self.user_name = ''
-        
-        # initialized in create_user method.
-        self.f_name = ''
-        self.l_name = ''
         
         # NOTE: i am sorry for the properties below. 
 
@@ -87,23 +86,12 @@ class UserCreation:
         # bool to check if the current user has an existing profile. this can be the exact user or a different user with the same name.
         self.existing_user = False
 
-        # if True, then the user is a unique duplicate user (user with the name of another existing in the database, but isn't the same person).
-        # by default it is False, assuming that every user created does not exist in the database.
-        # used to handle duplicate users if the unique ID > 0. it is set to true when an exception is thrown inside check_user_list.
-        self.duplicate_user = False
-
-        # used to stop a recursion issue, this only applies in one very specific circumstance.
-        self.loop_once = False
-
         # issue with the company field inside the creation of a new pid, this triggers a new step in the process.
         self.pid_error = False
 
         # used to prevent an infinite loop inside the new user creation. if two errors show up at the same time,
         # the error message at the top of the page will not go away and cause an infinite loop.
         self.error_counter = 0
-
-        # used for `fill_user` to stop the process of filling in the user if all existing values match the RITM values.
-        self.stop = False
 
         # prevent eid_search from repeating twice. this is a workaround to the new code i created, and it's easier than to overhaul my code.
         # this is False initially, becomes True in search_user_list, then False again after email or username search is executed.
@@ -133,9 +121,9 @@ class UserCreation:
         If an email address does not exist, then a new user will be created. 
         Otherwise, the user will be edited in the table directly.
         '''
-        self.f_name, self.l_name = self.__name_keys()
+        f_name, l_name = self.__name_keys()
         # changed later below if the user is a duplicate.
-        self.user_name = f'{self.f_name}.{self.l_name}@teksystemsgs.com'
+        self.user_name = f'{f_name}.{l_name}@teksystemsgs.com'
 
         # used to loop through the user search list for loop below. maximum of 3 times.
         loop_max = 1
@@ -144,49 +132,100 @@ class UserCreation:
         if self.email != 'TBD':
             loop_max += 1
 
-        # if checker_user_list is true, then break out after editing the user. if all loops finish, then this is a new user.
-        # this is used to ensure that all 3 types of checks are done (EID, email, username).
-        # the most important variable is self.existing_user = True, which indicates that 1. it is an existing user and 2. prevents the next statement.
+        # if all loops finish, then this is a new user. this loops check EID, email, and username, if applicable.
         b = False
         for i in range(loop_max):
             if i == loop_max - 1:
                 b = True
+            
+            if self._user_exists(search_user_name=b):
+                obj = self._get_user()
+                self._modify_table_data(obj, existing=True)
 
-            if self.__check_user_list(search_user_name=b):
-                self.fill_user()
                 break
         
-        # this increments inside check_user_list. the conditions: 1. no exception is thrown & 2. a user with the name exists but isn't a match.
+        # username_uid increments inside check_user_list.
+        # if a user entry exists with the same name, but is not the same user.
+        duplicate_user = False
         if self.user_name_unique_id > 0:
-            c = 0
-            while True:
-                self.user_name = f'{self.f_name}.{self.l_name}{str(self.user_name_unique_id)}@teksystemsgs.com'
+            self.user_name = f'{f_name}.{l_name}{str(self.user_name_unique_id)}@teksystemsgs.com'
 
-                if self.__check_user_list(search_user_name=True):
-                    self.fill_user()
-                    break
+            found_user: bool = self._user_exists(search_user_name=True)
+            obj = self._get_user()
 
-                if self.duplicate_user:
-                    break
-                
-                # this condition shouldn't ever be met, but just in case a cosmic ray hits the the computer.
-                if c > 7:
-                    raise AttemptsException
-                c += 1
+            if found_user:
+                self._modify_table_data(obj, True)
+            else:
+                duplicate_user = True
 
-        if not self.existing_user or self.duplicate_user:
-            self.__create_user_fill_info()
+        # indicates that this is a new user- no entry in the database.
+        if not self.existing_user or duplicate_user:
+            self._create_user_fill_info()
 
             errors = self.save_user()
 
             if not errors:
                 self.search_user_list(time_to_wait=18, search_by_user=False)
-                self.fill_user()
+
+                obj = self._get_user()
+
+                self._modify_table_data(obj)
         
         print("\n   User created. Please check the information before continuing.")
         self.driver.switch_to.default_content()
+    
+    def _modify_table_data(self, obj: WebElement, existing = False):
+        '''Corrects any incorrect data from a provided WebElement object in the user table. Returns None.
+        
+        Parameters
+        ----------
+            obj: WebElement
+                `WebElement` object that represents the row in the user search table. The method creates
+                a list of `WebElement` objects obtained from finding "td" tag elements.
+                These represents the cell `WebElement`, and is required to interact with the data.
+            
+            
+            existing: bool
+                Used to indicate if the user has an entry in the database or is a new user.
+                The method automatically assumes every user is a new user. By default it is `False`.
+        '''
+        obj_elements: list[WebElement] = obj.find_elements(By.CSS_SELECTOR, 'td')
 
-    def __create_user_fill_info(self):
+        if len(obj_elements) < 1:
+            raise ValueError(f'Got an empty {list}')
+                
+        check_elements = {
+            'p_id': obj_elements[4], 'c_id': obj_elements[5],
+            'off_num': obj_elements[6], 'off_id': obj_elements[7], 
+            'off_loc': obj_elements[8], 'division': obj_elements[9]
+        }
+
+        curr_values = [self.pid, self.cid, self.oid, 
+                        self.oid, self.oid_location, self.div]
+
+        # used only for new users- OID and PID are filled during the user creation process
+        if not existing:
+            del check_elements['p_id']
+            del check_elements['off_id']
+
+            del curr_values[0]
+            del curr_values[2]
+        
+        for i, web_ele in enumerate(check_elements.values()):
+            if web_ele.text != curr_values[i]:
+                text: str = web_ele.text if web_ele.text != '' else 'Empty entry'
+                print(f'   {text} does not match {curr_values[i]}.')
+
+                if existing and i == 0:
+                    # this is a cheeky trick to avoid clicking on the link found in the PID cell.
+                    self.actions.click(obj_elements[3]).send_keys(
+                        Keys.ARROW_RIGHT).pause(.6).send_keys(Keys.ENTER).perform()
+                else:
+                    self.actions.double_click(web_ele).pause(1).perform()
+
+                self.actions.send_keys(curr_values[i]).pause(.6).send_keys(Keys.ENTER).perform()
+
+    def _create_user_fill_info(self):
             '''Fills the required fields during the creation of a new user on the New User page.'''
 
             self.driver.get(self.link)
@@ -198,6 +237,7 @@ class UserCreation:
 
             self.__send_org_keys()
 
+            # ? i don't know why this is here. i'll leave it alone for now. 2/26/2025
             self.driver.find_element(By.XPATH, '//input[@id="sys_user.first_name"]').click()
 
     def save_user(self) -> bool:
@@ -230,8 +270,12 @@ class UserCreation:
             # non-duplicate users will go through the process as normal.
             if self.existing_user is False:
                 self.save_user()
+
+                # TODO: i am not sure if this is needed? needs further testing.
                 self.search_user_list(time_to_wait=18)
-                self.fill_user()
+
+                obj = self._get_user()
+                self._modify_table_data(obj)
         
         if not errors and self.existing_user is False:
             return False
@@ -291,212 +335,41 @@ class UserCreation:
         if not isinstance(search_by_user, bool):
             raise TypeError(f'Expected a bool for search_by_user, but got {type(search_by_user).__name__}.')
 
-        # this is used to prevent some recursion issue. i don't remember why and where it happened.
-        if self.loop_once is False:
-            user_link = Links.user_list
+        user_link = Links.user_list
 
-            print("\n   Searching for user...")
-            
-            self.driver.get(user_link)
-            self.__switch_frames()
+        print("\n   Searching for user...")
+        
+        self.driver.get(user_link)
+        self.__switch_frames()
 
-            search = '//input[@type="search"]'
+        search = '//input[@type="search"]'
 
-            # long wait time due to SNOW's slow updating, can't do anything about it.
-            time.sleep(time_to_wait)
-            user_search = self.driver.find_element(By.XPATH, search)
+        # long wait time due to SNOW's slow updating, can't do anything about it.
+        time.sleep(time_to_wait)
+        user_search = self.driver.find_element(By.XPATH, search)
 
-            # HACK: very terrible edge case regarding an idiot named PML.
-            if self.email == self.requestor:
-                self.email = self.user_name
+        # HACK: very terrible edge case regarding an idiot named PML.
+        if self.email == self.requestor:
+            self.email = self.user_name
 
-            if not search_by_user:
-                if self.eid != 'TBD' and not self.eid_search:
-                    user_search.send_keys(self.eid)
-                    self.eid_search = True
+        if not search_by_user:
+            if self.eid != 'TBD' and not self.eid_search:
+                user_search.send_keys(self.eid)
+                self.eid_search = True
+            else:
+                self.eid_search = False
+                if self.email != 'TBD':
+                    user_search.send_keys(self.email)
                 else:
-                    self.eid_search = False
-                    if self.email != 'TBD':
-                        user_search.send_keys(self.email)
-                    else:
-                        user_search.send_keys(self.user_name)
-            else:
-                user_search.send_keys(self.user_name)
+                    user_search.send_keys(self.user_name)
+        else:
+            user_search.send_keys(self.user_name)
 
-            time.sleep(1)
-            user_search.send_keys(Keys.ENTER)
+        time.sleep(1)
+        user_search.send_keys(Keys.ENTER)
 
-            time.sleep(1)
-            print("   User search completed.")
-      
-    def fill_user(self):
-        '''Edits the table cells for the current user once a search is completed.'''
-        # this is used to prevent some recursion issue.
-        if self.loop_once is False:
-            self.__switch_frames()
-
-            keys_to_send = [self.cid, self.oid, self.oid, self.oid_location, self.div]
-            user_cell_xpath = '//tr[@record_class="sys_user"]'
-
-            # cell positions: 5* 6 7 8 9 10
-            # PID*, CID, OID, OID, office location, division
-            # *only used if duplicate user is true- it gets inserted later.
-            user_cells_obj = [f'{user_cell_xpath}//td[{i}]' for i in range(6, 11)]
-
-            elements_obj = []
-            for path in user_cells_obj:
-                # wait for the element to appear and select it, if a timeout exception occurs then refresh the page.
-                # if it happens 5 times, then the RITM will be blacklisted.
-                attempts = 0
-                while True:
-                    try:
-                        element = WebDriverWait(self.driver, 5).until(EC.presence_of_element_located((By.XPATH, path)))
-                        break
-                    except TimeoutException:
-                        self.search_user_list(time_to_wait=8)
-
-                        if attempts > 5:
-                            raise AttemptsException
-                        attempts += 1
-                        
-                elements_obj.append(element)
-
-            cell_names = ['Customer ID', 'Office Number',
-            'Office ID', 'Office Location', 'Division']
-            # checks if the cell values are the same as the ticket info.
-            # if True, then remove the web object from the list to not fill.
-            if self.existing_user:
-                self.__check_cell_values(keys_to_send, elements_obj, cell_names)
-            else:
-                # remove oid/3rd element due to the existing user already having this value.
-                del keys_to_send[2]
-                del elements_obj[2]
-            
-            if not self.stop:
-                print("\n   Inserting in consultant values...")
-                time.sleep(1.5)
-
-            count = 0
-            repeat_attempts = 0
-            while count < len(keys_to_send) and repeat_attempts != 3 and not self.stop:
-                try:
-                    print(f'   Inserting {keys_to_send[count]}...')
-                    # used only for duplicate users, they have an additional PID to potentially modify.
-                    if cell_names[0] == 'Project ID':
-                        ActionChains(self.driver).click(elements_obj[count]).perform()
-                        time.sleep(.5)
-                        ActionChains(self.driver).send_keys(Keys.ARROW_RIGHT).perform()
-                        time.sleep(.5)
-                        ActionChains(self.driver).send_keys(Keys.ENTER).perform()
-                        time.sleep(1.5)
-                        cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="sys_display.LIST_EDIT_sys_user.u_project_id"]')
-                        del cell_names[0]
-                    else:
-                        ActionChains(self.driver).double_click(elements_obj[count]).perform()
-                        time.sleep(.5)
-                        cell_edit_value = self.driver.find_element(By.XPATH, '//input[@id="cell_edit_value"]')
-
-                    if cell_edit_value.text:
-                        cell_edit_value.send_keys(Keys.CONTROL + "a")
-                        time.sleep(.5)
-                        cell_edit_value.send_keys(Keys.DELETE)
-                        time.sleep(1)
-
-                    cell_edit_value.send_keys(keys_to_send[count])
-                    time.sleep(.5)
-                    cell_edit_value.send_keys(Keys.ENTER)
-                    time.sleep(.5)
-                    
-                    repeat_attempts = 0
-                    count += 1
-                    time.sleep(1)
-                except NoSuchElementException:
-                    repeat_attempts += 1
-                    print(f'   Failed inserting {keys_to_send[count]}. Attempting to fill again.')
-                    
-                    self.search_user_list(time_to_wait=5)
-                
-            # initialized by the constructor, checks if the company is a blanket admin.
-            # NOTE: this does not check for manually approved ones. it will maybe be implemented.
-            if self.admin:
-                admin_cell = self.driver.find_element(By.XPATH, f'{user_cell_xpath}//td[12]')
-                admin_cell_val = admin_cell.text
-
-                if admin_cell_val != 'true':
-                    ActionChains(self.driver).double_click(admin_cell).perform()
-                    time.sleep(1.5)
-
-                    admin_cell_edit = self.driver.find_element(By.XPATH, '//select[@class="form-control list-edit-input"]')
-                    ActionChains(self.driver).click(admin_cell_edit).perform()
-                    time.sleep(.5)
-                    ActionChains(self.driver).send_keys(Keys.ARROW_UP).perform()
-                    time.sleep(.5)
-                    ActionChains(self.driver).send_keys(Keys.ENTER).send_keys(Keys.ENTER).perform()
-                    time.sleep(.5)
-            
-            if repeat_attempts != 3:
-                print("   User filling completed.")
-                self.loop_once = True
-            else:
-                # TODO: create a custom exception here.
-                raise NoSuchElementException
-        
-            self.driver.switch_to.default_content()
-
-    def __check_cell_values(self, keys_to_send: list, elements_obj: list, cell_names: list) -> None:
-        '''Checks the user cell values in the database table for any mismatching values.
-        
-        Has two parameters:
-            1. `keys_to_send` is a list of keys that are the values entered to the cells.
-            2. `elements_obj` is a list of elements object xpaths of the cell in the table.
-
-        It modifies the list `keys_to_send` and `elements_obj` to add and remove cells based on matching values.
-        Returns None, as it uses pass by reference to modify the two lists.
-
-        This only method is only called if a duplicate user error appears.
-        '''
-
-        # xpath for where the child user cells are located.
-        user_cell_xpath = '//tbody[@class="list2_body -sticky-group-headers"]'
-        # initialized below, defined here to prevent an exception in a later loop if a condition isn't met.
-        pid_cell_element = ''
-        # if it is an existing user, insert PID to the beginning to modify it (if not matching).
-        # NOTE: elements_obj[0] will be changed later if the PID cell doesn't match.
-        pid_cell_element = self.driver.find_element(By.XPATH, f'{user_cell_xpath}//td[5]')
-
-        # insert these two elements to the front for both checking and modifying.
-        elements_obj.insert(0, pid_cell_element)
-        keys_to_send.insert(0, self.pid)
-        cell_names.insert(0, 'Project ID')
-
-        index_remover = []
-        match_count = 0
-
-        # if a cell matches to the key, track the index number.
-        for index, web_obj in enumerate(elements_obj):
-            if web_obj.text.lower() == keys_to_send[index].lower():
-                print(f'   {cell_names[index]} {web_obj.text} matches.')
-                index_remover.append(index)
-                time.sleep(.5)
-                match_count += 1
-            else:
-                print(f'   {cell_names[index]} {web_obj.text} does not match.')
-        
-        if match_count == 6:
-            print('   No values need to be updated.')
-            self.stop = True
-
-        for index in sorted(index_remover, reverse=True):
-            del elements_obj[index]
-            del keys_to_send[index]
-            del cell_names[index]
-        
-        if keys_to_send:
-            # changes the xpath "//td[5]" to the name cell "//td[4]".
-            # this is done to work around the href link found in "//td[5]"- check the while loop below.
-            if elements_obj[0] == pid_cell_element:
-                pid_cell_element = self.driver.find_element(By.XPATH, f'{user_cell_xpath}//td[4]')
-                elements_obj[0] = pid_cell_element
+        time.sleep(1)
+        print("   User search completed.")
 
     def __user_error_msg_company_pid(self) -> list:
         '''Checks for *Company* and *Project ID* error messages on the New User page.
@@ -596,7 +469,7 @@ class UserCreation:
                 raise AttemptsException
             
             self.user_name_unique_id += 1
-            self.__create_user_fill_info()
+            self._create_user_fill_info()
 
             if 'Unique key violation' not in self.__user_error_msg_check():
                 break
@@ -752,7 +625,7 @@ class UserCreation:
                 time.sleep(.5)
                 company_field.click()
                 time.sleep(.5)
-            ActionChains(self.driver).send_keys(Keys.ARROW_DOWN).send_keys(Keys.ENTER).perform()
+            self.actions.send_keys(Keys.ARROW_DOWN).send_keys(Keys.ENTER).perform()
             time.sleep(.5)
 
             allocation_field_xpath = '//select[@id="u_projects.u_allocation"]'
@@ -832,24 +705,14 @@ class UserCreation:
 
         self.driver.find_element(By.ID, "sys_user.employee_number").send_keys(self.eid)
     
-    def __check_user_list(self, *, search_user_name: bool = False) -> bool:
-        '''Checks if the user in the table, if they exist, is a duplicate or new user.
-
-        If any matches, then the user in the table will be edited with `fill_user`.
-        
-        If a user exists but there are no matches, then the unique ID will increment by one when creating a new user.
+    def _user_exists(self, *, search_user_name: bool = False) -> bool:
+        '''Checks if the user is in the search table. Returns `True` if it a user exists and is the correct
+        user, else returns `False`.
 
         Parameters
-        -------
-        `search_user_name`
-
-        (OPTIONAL) Default `False`. Searches by username instead of by email or employee ID if `True`.
-        
-        Returns
-        -------
-        `True` if either identifiers matches the user in the table: Employee ID and Email. 
-        
-        `False` if `NoSuchElementException` is thrown, the user does not exist in the database.
+        ----------
+        `search_user_name`: bool
+            Searches by username instead of by email or employee ID if `True`. Default `False`.
         '''
         self.__switch_frames()
 
@@ -858,22 +721,21 @@ class UserCreation:
         else:
             self.search_user_list(time_to_wait=5, search_by_user=True)
 
-        obj = self.__get_user()
+        obj = self._get_user()
 
         if not obj:
-            # this is incremented in __get_user().
-            if self.user_name_unique_id > 0:
-                self.duplicate_user = True
-
             return False
         
         self.existing_user = True
         return True
 
-    def __get_user(self) -> object | None:
-        '''Returns the web object of the matching user in the table.
+    def _get_user(self) -> WebElement | None:
+        '''Returns the `WebElement` of the matching user in the table. Returns `None` if not found.
+        
+        self.username_unique_id is incremented in this method.
+        This method assumes that the driver is on the page after a user search.
         '''
-        info_check = []
+        info_check: list[str] = []
 
         if self.email.lower() != 'tbd' or '@' in self.email.lower():
             info_check.append(self.email)
@@ -887,24 +749,29 @@ class UserCreation:
             list_row_odds = self.driver.find_elements(By.CSS_SELECTOR, '.list_row.list_odd')
             list_row_evens = self.driver.find_elements(By.CSS_SELECTOR, '.list_row.list_even')
 
-            table_objs = list_row_odds + list_row_evens
+            table_objs: list[WebElement] = list_row_odds + list_row_evens
 
             for i, obj in enumerate(table_objs, start=1):
-                full_text = obj.text
+                text_lowered: str = obj.text.lower()
 
-                for info in info_check:
-                    if info.lower() in full_text.lower():
-                        print(f'\n   {info} matches user entry {i}.\n')
-                        
-                        # reset is required because a future condition uses this value.
-                        if self.user_name_unique_id > 0:
-                            self.user_name_unique_id = 0
-
-                        return obj
+                # used to handle multiple users with the same EID/email.
+                name_found = self.name[0].lower() in text_lowered and self.name[1].lower() in text_lowered
                 
-                # this is only relevant if a user exists, but a match isn't found.
-                print(f'\n   User entry {i} does not match. Incrementing the unique ID by one.\n')
-                self.user_name_unique_id += 1
+                if name_found:
+                    for info in info_check:
+                        if info.lower() in text_lowered:
+                            print(f'\n   {info} matches user entry {i}.\n')
+                            
+                            # reset is required because a future condition uses this value.
+                            if self.user_name_unique_id > 0:
+                                self.user_name_unique_id = 0
+
+                            return obj
+                
+                # increments uid by 1 if EID/email doesn't match but the name does.
+                if self.user_name.lower() in text_lowered or name_found:
+                    print(f'\n   User entry {i} does not match. Incrementing the unique ID by one.\n')
+                    self.user_name_unique_id += 1
             
             return None
 
@@ -917,10 +784,6 @@ class UserCreation:
         If the username is a bad email input (before the error is detected), if the input does not contain an email with an \"@\",
         then the username is used in place of the personal email address.
         '''
-        # if the unique ID is > 0, then this is a different user with the same name as an existing one.
-        if self.user_name_unique_id > 0:
-            self.user_name = f'{self.f_name}.{self.l_name}{str(self.user_name_unique_id)}@teksystemsgs.com'
-
         user_name_obj = self.driver.find_element(By.ID, "sys_user.user_name")
 
         user_name_obj.send_keys(self.user_name)
