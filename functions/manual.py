@@ -183,7 +183,8 @@ class ManualRITM:
 
                 if scraper.is_ritm():
                     sel.create_user(self.driver, scraper, ritm)
-                    self.driver.get(Links.vtb)
+                    if self.driver.current_url != Links.vtb:
+                        self.driver.get(Links.vtb)
                     ritm_ele = self.scanner.get_ritm_element(ritm)
 
                     if ritm_ele is None:
