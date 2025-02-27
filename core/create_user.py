@@ -166,10 +166,19 @@ class UserCreation:
 
             if not errors:
                 self.search_user_list(time_to_wait=18, search_by_user=False)
-
-                obj = self._get_user()
-
-                self._modify_table_data(obj)
+                
+                # occasionally the database doesn't update, and needs a refresh to display the user.
+                for _ in range(4):
+                    try:
+                        obj = self._get_user()
+                        self._modify_table_data(obj)
+                    except AttributeError:
+                        self.driver.refresh()
+                        time.sleep(1.5)
+                
+                # maybe change this to a proper exception? this shouldn't occur with the loop above.
+                if obj is None:
+                    raise NoSuchElementException
         
         print("\n   User created. Please check the information before continuing.")
         self.driver.switch_to.default_content()
@@ -219,7 +228,7 @@ class UserCreation:
                 if existing and i == 0:
                     # this is a cheeky trick to avoid clicking on the link found in the PID cell.
                     self.actions.click(obj_elements[3]).send_keys(
-                        Keys.ARROW_RIGHT).pause(.6).send_keys(Keys.ENTER).perform()
+                        Keys.ARROW_RIGHT).send_keys(self.pid).pause(.6).send_keys(Keys.ENTER).perform()
                 else:
                     self.actions.double_click(web_ele).pause(1).perform()
 
@@ -742,6 +751,9 @@ class UserCreation:
 
         if self.eid.lower() != 'tbd':
             info_check.append(self.eid)
+
+        if len(info_check) < 1:
+            info_check.append(self.user_name)
 
         try:
             self.driver.find_element(By.CLASS_NAME, 'list2_no_records')
