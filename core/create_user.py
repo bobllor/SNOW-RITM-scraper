@@ -747,7 +747,11 @@ class UserCreation:
         info_check: list[str] = []
 
         if self.email.lower() != 'tbd' or '@' in self.email.lower():
-            info_check.append(self.email)
+            if len(self.email) > 40:
+                # insane edge case. if len > 40, it truncates all characters past 40.
+                info_check.append(self.email[:41])
+            else:
+                info_check.append(self.email)
 
         if self.eid.lower() != 'tbd':
             info_check.append(self.eid)
@@ -781,7 +785,7 @@ class UserCreation:
                             return obj
                 
                 # increments uid by 1 if EID/email doesn't match but the name does.
-                if self.user_name.lower() in text_lowered or name_found:
+                if (self.user_name.lower() in text_lowered or name_found):
                     print(f'\n   User entry {i} does not match. Incrementing the unique ID by one.\n')
                     self.user_name_unique_id += 1
             
