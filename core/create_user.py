@@ -225,14 +225,16 @@ class UserCreation:
                 text: str = web_ele.text if web_ele.text != '' else 'Empty entry'
                 print(f'   {text} does not match {curr_values[i]}.')
 
+                # the pause time is slightly longer due to additional checks from SNOW's backend.
+                t = 2 if i == 0 and existing else .6
                 if existing and i == 0:
                     # this is a cheeky trick to avoid clicking on the link found in the PID cell.
                     self.actions.click(obj_elements[3]).send_keys(
-                        Keys.ARROW_RIGHT).send_keys(self.pid).pause(.6).send_keys(Keys.ENTER).perform()
+                        Keys.ARROW_RIGHT).pause(1).send_keys(Keys.ENTER).pause(.7).perform()
                 else:
-                    self.actions.double_click(web_ele).pause(1).perform()
+                    self.actions.double_click(web_ele).pause(t).perform()
 
-                self.actions.send_keys(curr_values[i]).pause(.6).send_keys(Keys.ENTER).perform()
+                self.actions.send_keys(curr_values[i]).pause(t).send_keys(Keys.ENTER).perform()
 
     def _create_user_fill_info(self):
             '''Fills the required fields during the creation of a new user on the New User page.'''
