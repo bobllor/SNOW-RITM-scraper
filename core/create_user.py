@@ -174,7 +174,7 @@ class UserCreation:
                         self._modify_table_data(obj)
                     except AttributeError:
                         self.driver.refresh()
-                        time.sleep(1.5)
+                        time.sleep(4)
                 
                 # maybe change this to a proper exception? this shouldn't occur with the loop above.
                 if obj is None:

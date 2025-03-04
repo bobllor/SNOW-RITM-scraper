@@ -420,8 +420,8 @@ class ScrapeRITM:
         # this should very rarely ever be seen, but more idiot-proof code is better.
         if company.isdigit():
             company_xpath = company_xpath = '//tr[22]//input[@class="cat_item_option sc-content-pad form-control"]'
-            company = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{company_xpath}')
-
+            company = self.driver.find_element(By.XPATH, f'{self.company_info_xpath}{company_xpath}').get_attribute('value')
+        
         # another validation in case idiots (specifically NM requestors) put in the wrong company format again...
         # this takes into account of bad format like "COMPANY-123456" or "COMPANY 123456" or similar strings.
         if not company[0].isdigit() and ':' not in company:
@@ -520,7 +520,6 @@ class ScrapeRITM:
 
             while email[rp] not in bad_chars and rp < len(email) - 1:
                 rp += 1
-
         except AttributeError:
             email = 'TBD'
             
