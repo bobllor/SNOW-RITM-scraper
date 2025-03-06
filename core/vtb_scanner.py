@@ -51,7 +51,7 @@ class VTBScanner:
         '''
         self.__switch_frames()
 
-        ritm_elements = None
+        ritm_elements = []
         try:
             ritm_elements = WebDriverWait(self.driver, 15).until(
                 EC.presence_of_all_elements_located((By.XPATH, f'{self.req_lane}//a[contains(text(), "RITM")]'))
