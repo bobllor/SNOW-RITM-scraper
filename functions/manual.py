@@ -193,4 +193,4 @@ class ManualRITM:
 
                     self.scanner.drag_task(ritm_ele)
                 else:
-                    print('   Issue with search. Skipping the RITM.')
+                    print(f'   Issue with search for {ritm}. Skipping the RITM.')
