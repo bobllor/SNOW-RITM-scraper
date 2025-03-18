@@ -144,7 +144,6 @@ class UserCreation:
 
                 break
         
-        # username_uid increments inside check_user_list.
         # if a user entry exists with the same name, but is not the same user.
         duplicate_user = False
         if self.user_name_unique_id > 0:
@@ -209,32 +208,41 @@ class UserCreation:
             'off_loc': obj_elements[8], 'division': obj_elements[9]
         }
 
-        curr_values = [self.pid, self.cid, self.oid, 
-                        self.oid, self.oid_location, self.div]
+        curr_values = {
+            'p_id': self.pid, 'c_id': self.cid,
+            'off_num': self.oid, 'off_id': self.oid, 
+            'off_loc': self.oid_location, 'division': self.div
+        }
+
+        # edge case because of REDACTED
+        # honestly could just move this into scrape.py for the checking.
+        if not self.cid.isdigit():
+            del check_elements['c_id']
+            del curr_values['c_id']
 
         # used only for new users- OID and PID are filled during the user creation process
         if not existing:
             del check_elements['p_id']
             del check_elements['off_id']
 
-            del curr_values[0]
-            del curr_values[2]
+            del curr_values['p_id']
+            del curr_values['off_id']
         
-        for i, web_ele in enumerate(check_elements.values()):
-            if web_ele.text != curr_values[i]:
+        for key, web_ele in check_elements.items():
+            if web_ele.text != curr_values[key]:
                 text: str = web_ele.text if web_ele.text != '' else 'Empty entry'
-                print(f'   {text} does not match {curr_values[i]}.')
+                print(f'   {text} does not match {curr_values[key]}.')
 
                 # the pause time is slightly longer due to additional checks from SNOW's backend.
-                t = 2 if i == 0 and existing else .6
-                if existing and i == 0:
+                t = 2 if key == 'p_id' and existing else .6
+                if existing and key == 'p_id':
                     # this is a cheeky trick to avoid clicking on the link found in the PID cell.
                     self.actions.click(obj_elements[3]).send_keys(
                         Keys.ARROW_RIGHT).pause(1).send_keys(Keys.ENTER).pause(.7).perform()
                 else:
                     self.actions.double_click(web_ele).pause(t).perform()
 
-                self.actions.send_keys(curr_values[i]).pause(t).send_keys(Keys.ENTER).perform()
+                self.actions.send_keys(curr_values[key]).pause(t).send_keys(Keys.ENTER).perform()
 
     def _create_user_fill_info(self):
             '''Fills the required fields during the creation of a new user on the New User page.'''
