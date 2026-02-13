@@ -1,5 +1,7 @@
 # About the Project
 
+**Note**: Due to changes with the ServiceNow instance on my job, this is no longer used or maintained.
+
 SNOW user creation automation uses Selenium to automate the creation of users to add into the ServiceNow database.
 
 It scans the taskboard for any tickets that is added to the board, scrape the user information of the ticket, and then fills in the fields required to create the user.
